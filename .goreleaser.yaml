@@ -36,33 +36,43 @@ archives:
       - tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
 
+homebrew_casks:
+  - name: sql-tap
+    homepage: https://github.com/proto-tap/sql-tap
+    description: Watch SQL traffic in real-time with a TUI
+    binaries:
+      - sql-tap
+      - sql-tapd
+    hooks:
+      post:
+        install_steps: |
+          on_macos do
+            run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{ .StagedPath }}"]
+          end
+    repository:
+      owner: proto-tap
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+
+# Points existing mickamy/tap users to the cask. Remove after the migration release.
 brews:
   - name: sql-tap
-    homepage: https://github.com/mickamy/sql-tap
+    homepage: https://github.com/proto-tap/sql-tap
     description: Watch SQL traffic in real-time with a TUI
     directory: Formula
     install: |
       bin.install "sql-tap"
       bin.install "sql-tapd"
+    custom_block: |
+      disable! date: "2027-04-27", because: "has moved to the proto-tap/tap cask", replacement_cask: "proto-tap/tap/sql-tap"
+    caveats: |
+      sql-tap has moved to the proto-tap/tap cask. Switch with:
+        brew uninstall sql-tap
+        brew install --cask proto-tap/tap/sql-tap
     repository:
       owner: mickamy
       name: homebrew-tap
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
-
-nix:
-  # Publishes a Nix derivation that installs pre-built binaries to
-  # the mickamy/nur-packages repository on each release.
-  # Prerequisites:
-  #   1. Create the mickamy/nur-packages repository (NUR-compatible layout).
-  #   2. Add "install nix" step to the release workflow so nix-hash is available.
-  - name: sql-tap
-    homepage: https://github.com/mickamy/sql-tap
-    description: Watch SQL traffic in real-time with a TUI
-    license: mit
-    repository:
-      owner: mickamy
-      name: nur-packages
-      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+      token: "{{ .Env.MICKAMY_GITHUB_TOKEN }}"
 
 changelog:
   sort: asc
