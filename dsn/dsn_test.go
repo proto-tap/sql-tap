@@ -3,7 +3,7 @@ package dsn_test
 import (
 	"testing"
 
-	"github.com/mickamy/sql-tap/dsn"
+	"github.com/proto-tap/sql-tap/dsn"
 )
 
 func TestDetectDriver(t *testing.T) {

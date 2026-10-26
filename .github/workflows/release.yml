@@ -29,3 +29,4 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAP_GITHUB_TOKEN: ${{ secrets.TAP_GITHUB_TOKEN }}
+          MICKAMY_GITHUB_TOKEN: ${{ secrets.MICKAMY_GITHUB_TOKEN }}

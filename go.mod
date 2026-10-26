@@ -1,4 +1,4 @@
-module github.com/mickamy/sql-tap
+module github.com/proto-tap/sql-tap
 
 go 1.26.1
 

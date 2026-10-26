@@ -11,8 +11,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/testcontainers/testcontainers-go/modules/mysql"
 
-	"github.com/mickamy/sql-tap/proxy"
-	mproxy "github.com/mickamy/sql-tap/proxy/mysql"
+	"github.com/proto-tap/sql-tap/proxy"
+	mproxy "github.com/proto-tap/sql-tap/proxy/mysql"
 )
 
 const (

@@ -16,7 +16,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // MySQL binary protocol field types.

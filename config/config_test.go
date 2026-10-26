@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mickamy/sql-tap/config"
+	"github.com/proto-tap/sql-tap/config"
 )
 
 func TestDefault(t *testing.T) {

@@ -3,7 +3,7 @@ package main
 import (
 	"testing"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 func TestIsSelectQuery(t *testing.T) {

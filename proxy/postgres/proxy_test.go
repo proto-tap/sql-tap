@@ -12,8 +12,8 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	"github.com/mickamy/sql-tap/proxy"
-	pproxy "github.com/mickamy/sql-tap/proxy/postgres"
+	"github.com/proto-tap/sql-tap/proxy"
+	pproxy "github.com/proto-tap/sql-tap/proxy/postgres"
 )
 
 const (

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mickamy/sql-tap/broker"
-	"github.com/mickamy/sql-tap/proxy"
-	"github.com/mickamy/sql-tap/web"
+	"github.com/proto-tap/sql-tap/broker"
+	"github.com/proto-tap/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/web"
 )
 
 func TestStaticFiles(t *testing.T) {

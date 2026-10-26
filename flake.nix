@@ -44,7 +44,7 @@
                 view transactions, and run EXPLAIN — all without changing your
                 application code.
               '';
-              homepage = "https://github.com/mickamy/sql-tap";
+              homepage = "https://github.com/proto-tap/sql-tap";
               license = licenses.mit;
               maintainers = [ ];
               mainProgram = "sql-tap";

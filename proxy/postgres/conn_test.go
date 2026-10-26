@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	pgproxy "github.com/mickamy/sql-tap/proxy/postgres"
+	pgproxy "github.com/proto-tap/sql-tap/proxy/postgres"
 )
 
 // encodeMicros encodes microseconds as big-endian 8 bytes (PostgreSQL binary timestamp format).

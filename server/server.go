@@ -14,10 +14,10 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/mickamy/sql-tap/broker"
-	"github.com/mickamy/sql-tap/explain"
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/broker"
+	"github.com/proto-tap/sql-tap/explain"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // Server exposes a gRPC TapService for TUI clients to connect to.

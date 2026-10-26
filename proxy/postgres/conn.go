@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	pgproto "github.com/jackc/pgproto3/v2"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // encoder is satisfied by both FrontendMessage and BackendMessage.

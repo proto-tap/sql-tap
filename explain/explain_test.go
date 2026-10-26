@@ -3,7 +3,7 @@ package explain_test
 import (
 	"testing"
 
-	"github.com/mickamy/sql-tap/explain"
+	"github.com/proto-tap/sql-tap/explain"
 )
 
 func TestMode_String(t *testing.T) {

@@ -10,8 +10,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mickamy/sql-tap/ci"
-	"github.com/mickamy/sql-tap/tui"
+	"github.com/proto-tap/sql-tap/ci"
+	"github.com/proto-tap/sql-tap/tui"
 )
 
 var version = "dev"

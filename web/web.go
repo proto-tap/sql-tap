@@ -10,9 +10,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/mickamy/sql-tap/broker"
-	"github.com/mickamy/sql-tap/explain"
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/broker"
+	"github.com/proto-tap/sql-tap/explain"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 //go:embed static

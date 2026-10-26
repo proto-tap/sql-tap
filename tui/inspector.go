@@ -7,8 +7,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/mickamy/sql-tap/explain"
-	"github.com/mickamy/sql-tap/highlight"
+	"github.com/proto-tap/sql-tap/explain"
+	"github.com/proto-tap/sql-tap/highlight"
 )
 
 func (m Model) updateInspect(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

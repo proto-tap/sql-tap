@@ -5,7 +5,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/mickamy/sql-tap/clipboard"
+	"github.com/proto-tap/sql-tap/clipboard"
 )
 
 func TestCopy(t *testing.T) {

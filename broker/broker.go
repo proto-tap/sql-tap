@@ -3,7 +3,7 @@ package broker
 import (
 	"sync"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // Broker implements a non-blocking fan-out pub/sub for proxy events.
