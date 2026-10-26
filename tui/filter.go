@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/proxy"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 type filterKind int

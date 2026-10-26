@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mickamy/sql-tap/detect"
+	"github.com/proto-tap/sql-tap/detect"
 )
 
 func TestBelowThreshold(t *testing.T) {

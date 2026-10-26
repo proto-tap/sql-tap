@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
 )
 
 // Result holds the CI run outcome.

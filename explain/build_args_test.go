@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mickamy/sql-tap/explain"
+	"github.com/proto-tap/sql-tap/explain"
 )
 
 func TestParseTimestampParams(t *testing.T) {

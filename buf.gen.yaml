@@ -3,7 +3,7 @@ managed:
   enabled: true
   override:
     - file_option: go_package_prefix
-      value: github.com/mickamy/sql-tap/gen
+      value: github.com/proto-tap/sql-tap/gen
 plugins:
   - remote: buf.build/protocolbuffers/go
     out: gen

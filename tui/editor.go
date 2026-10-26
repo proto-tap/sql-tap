@@ -9,7 +9,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
-	"github.com/mickamy/sql-tap/explain"
+	"github.com/proto-tap/sql-tap/explain"
 )
 
 type editorResultMsg struct {

@@ -12,8 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/mickamy/sql-tap/clipboard"
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/clipboard"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 type analyticsSortMode int

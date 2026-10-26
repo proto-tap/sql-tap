@@ -3,7 +3,7 @@ package postgres
 import (
 	pgproto "github.com/jackc/pgproto3/v2"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // Exported wrappers for internal symbols used in package-external tests.

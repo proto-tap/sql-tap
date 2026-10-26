@@ -9,8 +9,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/proxy"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 const tlLabelWidth = 40

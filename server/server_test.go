@@ -10,10 +10,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
-	"github.com/mickamy/sql-tap/broker"
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/proxy"
-	"github.com/mickamy/sql-tap/server"
+	"github.com/proto-tap/sql-tap/broker"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/server"
 )
 
 func startServer(t *testing.T, b *broker.Broker) tapv1.TapServiceClient {

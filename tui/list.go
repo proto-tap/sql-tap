@@ -6,9 +6,9 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/highlight"
-	"github.com/mickamy/sql-tap/proxy"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/highlight"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 func eventStatus(ev *tapv1.QueryEvent) string {

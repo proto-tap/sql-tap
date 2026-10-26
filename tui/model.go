@@ -12,11 +12,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"github.com/mickamy/sql-tap/clipboard"
-	"github.com/mickamy/sql-tap/explain"
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/proxy"
-	"github.com/mickamy/sql-tap/query"
+	"github.com/proto-tap/sql-tap/clipboard"
+	"github.com/proto-tap/sql-tap/explain"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/query"
 )
 
 type viewMode int

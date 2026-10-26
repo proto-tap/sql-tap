@@ -11,7 +11,7 @@ import (
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 func formatTimeFull(t *timestamppb.Timestamp) string {

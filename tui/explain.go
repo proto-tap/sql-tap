@@ -8,10 +8,10 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
-	"github.com/mickamy/sql-tap/clipboard"
-	"github.com/mickamy/sql-tap/explain"
-	tapv1 "github.com/mickamy/sql-tap/gen/tap/v1"
-	"github.com/mickamy/sql-tap/highlight"
+	"github.com/proto-tap/sql-tap/clipboard"
+	"github.com/proto-tap/sql-tap/explain"
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/highlight"
 )
 
 func (m Model) updateExplain(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

@@ -7,7 +7,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/mickamy/sql-tap
+        - github.com/proto-tap/sql-tap
 
 linters:
   default: all

@@ -3,7 +3,7 @@ package query_test
 import (
 	"testing"
 
-	"github.com/mickamy/sql-tap/query"
+	"github.com/proto-tap/sql-tap/query"
 )
 
 func TestBind(t *testing.T) {

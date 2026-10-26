@@ -7,7 +7,7 @@ import (
 	"net"
 	"sync"
 
-	"github.com/mickamy/sql-tap/proxy"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 var _ proxy.Proxy = (*Proxy)(nil)
