@@ -16,20 +16,29 @@ your application code.
 ### Homebrew
 
 ```bash
-brew install mickamy/tap/sql-tap
+brew install --cask proto-tap/tap/sql-tap
 ```
+
+> [!NOTE]
+> sql-tap has moved from the `mickamy/tap` formula to the `proto-tap/tap` cask. If you installed it from `mickamy/tap`,
+> switch with:
+>
+> ```bash
+> brew uninstall sql-tap
+> brew install --cask proto-tap/tap/sql-tap
+> ```
 
 ### Go
 
 ```bash
-go install github.com/mickamy/sql-tap@latest
-go install github.com/mickamy/sql-tap/cmd/sql-tapd@latest
+go install github.com/proto-tap/sql-tap@latest
+go install github.com/proto-tap/sql-tap/cmd/sql-tapd@latest
 ```
 
 ### Build from source
 
 ```bash
-git clone https://github.com/mickamy/sql-tap.git
+git clone https://github.com/proto-tap/sql-tap.git
 cd sql-tap
 make install
 ```
@@ -39,7 +48,7 @@ make install
 **Using the flake directly**
 
 ```bash
-nix profile install github:mickamy/sql-tap
+nix profile install github:proto-tap/sql-tap
 ```
 
 **In a `devenv.sh` project**
@@ -49,7 +58,7 @@ Add `sql-tap` as a flake input in `devenv.yaml`:
 ```yaml
 inputs:
   sql-tap:
-    url: github:mickamy/sql-tap
+    url: github:proto-tap/sql-tap
 ```
 
 Then reference it in `devenv.nix`:
@@ -69,7 +78,7 @@ Then reference it in `devenv.nix`:
 FROM alpine:3
 ARG SQL_TAP_VERSION=0.0.1
 ARG TARGETARCH
-ADD https://github.com/mickamy/sql-tap/releases/download/v${SQL_TAP_VERSION}/sql-tap_${SQL_TAP_VERSION}_linux_${TARGETARCH}.tar.gz /tmp/sql-tap.tar.gz
+ADD https://github.com/proto-tap/sql-tap/releases/download/v${SQL_TAP_VERSION}/sql-tap_${SQL_TAP_VERSION}_linux_${TARGETARCH}.tar.gz /tmp/sql-tap.tar.gz
 RUN tar -xzf /tmp/sql-tap.tar.gz -C /usr/local/bin sql-tapd && rm /tmp/sql-tap.tar.gz
 ENTRYPOINT ["sql-tapd"]
 ```
@@ -399,7 +408,7 @@ sql-tapd parses the database wire protocol (PostgreSQL, MySQL, or TiDB) to inter
 
 ## See also
 
-- **[grpc-tap](https://github.com/mickamy/grpc-tap)** — Same concept for gRPC. Transparent HTTP/2 reverse proxy that
+- **[grpc-tap](https://github.com/proto-tap/grpc-tap)** — Same concept for gRPC. Transparent HTTP/2 reverse proxy that
   captures every gRPC / gRPC-Web / Connect call with TUI + Web UI.
 
 ## License
