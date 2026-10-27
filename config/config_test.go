@@ -116,7 +116,7 @@ upstream: "localhost:3306"
 	}
 }
 
-func TestLoad_NoDefaultFile(t *testing.T) { //nolint:paralleltest // t.Chdir is incompatible with t.Parallel
+func TestLoad_NoDefaultFile(t *testing.T) {
 	t.Chdir(t.TempDir())
 
 	cfg, err := config.Load("")
