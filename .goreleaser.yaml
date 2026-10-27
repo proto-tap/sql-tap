@@ -54,25 +54,5 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.TAP_GITHUB_TOKEN }}"
 
-# Points existing mickamy/tap users to the cask. Remove after the migration release.
-brews:
-  - name: sql-tap
-    homepage: https://github.com/proto-tap/sql-tap
-    description: Watch SQL traffic in real-time with a TUI
-    directory: Formula
-    install: |
-      bin.install "sql-tap"
-      bin.install "sql-tapd"
-    custom_block: |
-      disable! date: "2027-04-27", because: "has moved to the proto-tap/tap cask", replacement_cask: "proto-tap/tap/sql-tap"
-    caveats: |
-      sql-tap has moved to the proto-tap/tap cask. Switch with:
-        brew uninstall sql-tap
-        brew install --cask proto-tap/tap/sql-tap
-    repository:
-      owner: mickamy
-      name: homebrew-tap
-      token: "{{ .Env.MICKAMY_GITHUB_TOKEN }}"
-
 changelog:
   sort: asc
