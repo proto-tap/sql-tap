@@ -33,6 +33,7 @@ linters:
     - dupl             # High false-positive rate in test suites where setup code is similar
     - err113           # Sentinel errors are used where meaningful; contextual fmt.Errorf is preferred elsewhere
     - exhaustruct      # Hinders use of default values; too boilerplate-heavy for large structs
+    - exhaustruct_v5   # Same as exhaustruct
     - forbidigo        # Essential for CLI tools that rely on fmt.Print for user output
     - funlen           # Testing logic and table-driven tests naturally exceed standard length
     - gochecknoglobals # Necessary for certain package-level configurations or singleton patterns

@@ -314,7 +314,7 @@ func (c *conn) relay(ctx context.Context) error {
 	err := <-errCh
 	_ = c.clientConn.Close()
 	_ = c.upstreamConn.Close()
-	<-errCh
+	<-errCh //nolint:errcheck // only waiting for the other goroutine to exit
 
 	return err
 }
@@ -753,8 +753,7 @@ func isClosedErr(err error) bool {
 	if errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
 		return true
 	}
-	var netErr *net.OpError
-	if errors.As(err, &netErr) {
+	if netErr, ok := errors.AsType[*net.OpError](err); ok {
 		return netErr.Err.Error() == "use of closed network connection"
 	}
 	return strings.Contains(err.Error(), "closed")
