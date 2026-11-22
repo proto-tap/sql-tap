@@ -31,6 +31,7 @@ func TestRunDiff(t *testing.T) {
 	same := writeTestReport(t, "same.json", ci.TemplateStat{Query: q, Count: 10})
 	more := writeTestReport(t, "more.json", ci.TemplateStat{Query: q, Count: 11})
 	empty := writeTestReport(t, "empty.json")
+	slow := writeTestReport(t, "slow.json", ci.TemplateStat{Query: q, Count: 10, SlowCount: 1})
 	cmdAll := writeTestReportWithCommand(t, "all.json", []string{"go", "test", "./..."},
 		ci.TemplateStat{Query: q, Count: 10})
 	cmdOne := writeTestReportWithCommand(t, "one.json", []string{"go", "test", "./order/..."},
@@ -53,6 +54,8 @@ func TestRunDiff(t *testing.T) {
 		{name: "unknown format", args: []string{"-format=html", base, same}, wantCode: 2, wantStderr: "unknown -format"},
 		{name: "wrong arg count", args: []string{base}, wantCode: 2, wantStderr: "Usage:"},
 		{name: "help", args: []string{"-h"}, wantCode: 0, wantStderr: "Exit codes:"},
+		{name: "slow warns by default", args: []string{base, slow}, wantCode: 0, wantStdout: "Warnings:"},
+		{name: "fail on slow", args: []string{"-fail-on-slow", base, slow}, wantCode: 1, wantStdout: "[SLOW] 0 -> 1"},
 		{name: "command mismatch", args: []string{cmdAll, cmdOne}, wantCode: 2, wantStderr: "-allow-command-mismatch"},
 		{name: "command mismatch allowed", args: []string{"-allow-command-mismatch", cmdAll, cmdOne}, wantCode: 0,
 			wantStdout: "commands differ"},

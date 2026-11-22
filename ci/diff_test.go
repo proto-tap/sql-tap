@@ -109,7 +109,7 @@ func TestDiff_Regressions(t *testing.T) {
 			},
 		},
 		{
-			name: "slow moves to another template without total increase",
+			name: "slow moves to another template without total increase, with FailOnSlow",
 			before: result(
 				ci.TemplateStat{Query: qOrders, Count: 1, SlowCount: 1},
 				ci.TemplateStat{Query: qBatch, Count: 1},
@@ -118,6 +118,7 @@ func TestDiff_Regressions(t *testing.T) {
 				ci.TemplateStat{Query: qOrders, Count: 1},
 				ci.TemplateStat{Query: qBatch, Count: 1, SlowCount: 1},
 			),
+			opts: ci.DiffOptions{FailOnSlow: true},
 			want: []ci.Regression{{Kind: ci.RegressionSlow, Query: qBatch, After: 1}},
 		},
 	}
@@ -155,6 +156,24 @@ func TestDiff_NoStatements(t *testing.T) {
 				t.Errorf("err = %v, want ErrNoStatements", err)
 			}
 		})
+	}
+}
+
+func TestDiff_SlowWarnsByDefault(t *testing.T) {
+	t.Parallel()
+
+	before := result(ci.TemplateStat{Query: qOrders, Count: 1})
+	after := result(ci.TemplateStat{Query: qOrders, Count: 1, SlowCount: 1})
+
+	c, err := ci.Diff(before, after, ci.DiffOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.HasRegressions() {
+		t.Errorf("Regressions = %+v, want none", c.Regressions)
+	}
+	if !slices.Contains(c.Warnings, "[SLOW] 0 -> 1") {
+		t.Errorf("Warnings = %q, want to contain %q", c.Warnings, "[SLOW] 0 -> 1")
 	}
 }
 

@@ -28,6 +28,8 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	}
 	format := fs.String("format", "text", "output format: text, markdown or json")
 	allowIncrease := fs.Float64("allow-increase", 0, "tolerated statement count increase in percent")
+	failOnSlow := fs.Bool("fail-on-slow", false,
+		"treat slow query increases as regressions (by default they only warn, since timing varies between runs)")
 	allowCommandMismatch := fs.Bool("allow-command-mismatch", false,
 		"compare reports measured with different commands, with a warning")
 
@@ -59,6 +61,7 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 
 	c, err := ci.Diff(before, after, ci.DiffOptions{
 		AllowIncreasePercent: *allowIncrease,
+		FailOnSlow:           *failOnSlow,
 		AllowCommandMismatch: *allowCommandMismatch,
 	})
 	if err != nil {

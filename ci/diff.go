@@ -21,6 +21,9 @@ var ErrCommandMismatch = errors.New("reports were measured with different comman
 type DiffOptions struct {
 	// AllowIncreasePercent is the statement count increase tolerated before it counts as a regression.
 	AllowIncreasePercent float64
+	// FailOnSlow treats slow query increases as regressions instead of warnings.
+	// Slow flags depend on timing and vary between runs, so they only warn by default.
+	FailOnSlow bool
 	// AllowCommandMismatch compares reports measured with different commands, with a warning.
 	AllowCommandMismatch bool
 }
@@ -114,8 +117,15 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 	}
 	c.Regressions = append(c.Regressions, flagRegressions(RegressionNPlus1, c.NPlus1, c.Templates,
 		func(t TemplateStat) int { return t.NPlus1Count })...)
-	c.Regressions = append(c.Regressions, flagRegressions(RegressionSlow, c.Slow, c.Templates,
-		func(t TemplateStat) int { return t.SlowCount })...)
+	slow := flagRegressions(RegressionSlow, c.Slow, c.Templates,
+		func(t TemplateStat) int { return t.SlowCount })
+	if opts.FailOnSlow {
+		c.Regressions = append(c.Regressions, slow...)
+	} else {
+		for _, r := range slow {
+			c.Warnings = append(c.Warnings, r.String())
+		}
+	}
 
 	return c, nil
 }
