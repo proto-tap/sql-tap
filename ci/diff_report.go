@@ -106,10 +106,20 @@ func (r Regression) markdown() string {
 // mdCode wraps s in an inline code span that is safe inside a table cell.
 func mdCode(s string) string {
 	s = strings.ReplaceAll(s, "|", `\|`)
-	if strings.Contains(s, "`") {
-		return "`` " + s + " ``"
+	longest, run := 0, 0
+	for _, r := range s {
+		if r != '`' {
+			run = 0
+			continue
+		}
+		run++
+		longest = max(longest, run)
 	}
-	return "`" + s + "`"
+	if longest == 0 {
+		return "`" + s + "`"
+	}
+	fence := strings.Repeat("`", longest+1)
+	return fence + " " + s + " " + fence
 }
 
 type jsonComparison struct {

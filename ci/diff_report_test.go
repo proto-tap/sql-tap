@@ -86,11 +86,20 @@ func TestComparison_Markdown(t *testing.T) {
 func TestComparison_Markdown_BacktickQuery(t *testing.T) {
 	t.Parallel()
 
-	c := ci.Comparison{
-		Statements: ci.Delta{Before: 1, After: 1},
-		Templates:  []ci.TemplateDiff{{Query: "SELECT `id` FROM t", After: ci.TemplateStat{Count: 1}}},
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "SELECT `id` FROM t", want: "| `` SELECT `id` FROM t `` |"},
+		{query: "SELECT `a``b` FROM t", want: "| ``` SELECT `a``b` FROM t ``` |"},
 	}
-	assertContains(t, c.Markdown(), "| `` SELECT `id` FROM t `` |")
+	for _, tt := range tests {
+		c := ci.Comparison{
+			Statements: ci.Delta{Before: 1, After: 1},
+			Templates:  []ci.TemplateDiff{{Query: tt.query, After: ci.TemplateStat{Count: 1}}},
+		}
+		assertContains(t, c.Markdown(), tt.want)
+	}
 }
 
 func TestComparison_MarshalJSON(t *testing.T) {
