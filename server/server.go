@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/durationpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -19,6 +20,10 @@ import (
 	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
 	"github.com/proto-tap/sql-tap/proxy"
 )
+
+// SubscribedHeader is the Watch response header key sent once the subscription is registered.
+// Clients wait for it to know that no event published afterwards will be missed.
+const SubscribedHeader = "sql-tap-subscribed"
 
 // Server exposes a gRPC TapService for TUI clients to connect to.
 type Server struct {
@@ -63,6 +68,10 @@ type tapService struct {
 func (s *tapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
 	ch, unsub := s.broker.Subscribe()
 	defer unsub()
+
+	if err := stream.SendHeader(metadata.Pairs(SubscribedHeader, "true")); err != nil {
+		return fmt.Errorf("server: watch send header: %w", err)
+	}
 
 	ctx := stream.Context()
 	for {
