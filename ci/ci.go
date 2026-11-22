@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -266,11 +265,12 @@ func (a *aggregator) result() Result {
 		}
 	}
 
-	sort.Slice(r.Problems, func(i, j int) bool {
-		if r.Problems[i].Kind != r.Problems[j].Kind {
-			return r.Problems[i].Kind < r.Problems[j].Kind
-		}
-		return r.Problems[i].Count > r.Problems[j].Count
+	slices.SortFunc(r.Problems, func(x, y Problem) int {
+		return cmp.Or(
+			cmp.Compare(x.Kind, y.Kind),
+			cmp.Compare(y.Count, x.Count),
+			cmp.Compare(x.Query, y.Query),
+		)
 	})
 
 	return r

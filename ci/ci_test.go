@@ -213,6 +213,29 @@ func TestAggregate_UsesRawQueryWhenNormalizedEmpty(t *testing.T) {
 	}
 }
 
+func TestAggregate_ProblemsOrderIsDeterministic(t *testing.T) {
+	t.Parallel()
+
+	// Same kind and count for every query, so only the query can break the tie.
+	queries := []string{"SELECT c FROM t", "SELECT a FROM t", "SELECT b FROM t"}
+	events := make([]*tapv1.QueryEvent, 0, len(queries))
+	for _, q := range queries {
+		events = append(events, &tapv1.QueryEvent{Query: q, NormalizedQuery: q, NPlus_1: true})
+	}
+
+	want := []string{"SELECT a FROM t", "SELECT b FROM t", "SELECT c FROM t"}
+	for range 20 {
+		problems := ci.Aggregate(events).Problems
+		got := make([]string, 0, len(problems))
+		for _, p := range problems {
+			got = append(got, p.Query)
+		}
+		if !slices.Equal(got, want) {
+			t.Fatalf("Problems order = %v, want %v", got, want)
+		}
+	}
+}
+
 func TestAggregate_Templates(t *testing.T) {
 	t.Parallel()
 
