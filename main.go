@@ -19,14 +19,20 @@ import (
 var version = "dev"
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "diff" {
-		os.Exit(runDiff(os.Args[2:], os.Stdout, os.Stderr))
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "run":
+			os.Exit(runRun(os.Args[2:], os.Stdin, os.Stdout, os.Stderr))
+		case "diff":
+			os.Exit(runDiff(os.Args[2:], os.Stdout, os.Stderr))
+		}
 	}
 
 	fs := flag.NewFlagSet("sql-tap", flag.ExitOnError)
 	fs.Usage = func() {
 		fmt.Fprintf(os.Stderr, "sql-tap — Watch SQL traffic in real-time\n\n"+
-			"Usage:\n  sql-tap [flags] <addr>\n  sql-tap diff [flags] <before.json> <after.json>\n\nFlags:\n")
+			"Usage:\n  sql-tap [flags] <addr>\n  sql-tap run [flags] <addr> -- <command> [args...]\n"+
+			"  sql-tap diff [flags] <before.json> <after.json>\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 
