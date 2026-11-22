@@ -1,10 +1,12 @@
 package ci
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -15,12 +17,27 @@ import (
 	"google.golang.org/grpc/status"
 
 	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
+	"github.com/proto-tap/sql-tap/proxy"
 )
 
 // Result holds the CI run outcome.
 type Result struct {
 	TotalQueries int
-	Problems     []Problem
+	// TotalDuration sums the durations of statements counted in Templates.
+	TotalDuration time.Duration
+	// Templates is sorted by TotalDuration descending.
+	Templates []TemplateStat
+	Problems  []Problem
+}
+
+// TemplateStat aggregates executions of a single normalized statement.
+// Transaction control, Prepare and Bind events are excluded.
+type TemplateStat struct {
+	Query         string
+	Count         int
+	TotalDuration time.Duration
+	NPlus1Count   int
+	SlowCount     int
 }
 
 // HasProblems reports whether any issues were detected.
@@ -120,47 +137,88 @@ func isStreamDone(ctx context.Context, err error) bool {
 	return code == codes.Canceled || code == codes.DeadlineExceeded
 }
 
-type queryStats struct {
+type problemStats struct {
 	nplus1Count int
 	slowCount   int
-	totalDur    time.Duration
+	slowDur     time.Duration
 }
 
 type aggregator struct {
-	total   int
-	grouped map[string]*queryStats
+	total     int
+	problems  map[string]*problemStats
+	templates map[string]*TemplateStat
 }
 
 func newAggregator() *aggregator {
-	return &aggregator{grouped: make(map[string]*queryStats)}
+	return &aggregator{
+		problems:  make(map[string]*problemStats),
+		templates: make(map[string]*TemplateStat),
+	}
 }
 
 func (a *aggregator) add(e *tapv1.QueryEvent) {
 	a.total++
+	q := normalizedOrRaw(e)
+	dur := e.GetDuration().AsDuration()
+
+	if isStatement(e) && q != "" {
+		t, ok := a.templates[q]
+		if !ok {
+			t = &TemplateStat{Query: q}
+			a.templates[q] = t
+		}
+		t.Count++
+		t.TotalDuration += dur
+		if e.GetNPlus_1() {
+			t.NPlus1Count++
+		}
+		if e.GetSlowQuery() {
+			t.SlowCount++
+		}
+	}
+
 	if !e.GetNPlus_1() && !e.GetSlowQuery() {
 		return
 	}
-	q := normalizedOrRaw(e)
-	s, ok := a.grouped[q]
+	s, ok := a.problems[q]
 	if !ok {
-		s = &queryStats{}
-		a.grouped[q] = s
+		s = &problemStats{}
+		a.problems[q] = s
 	}
 	if e.GetNPlus_1() {
 		s.nplus1Count++
 	}
 	if e.GetSlowQuery() {
 		s.slowCount++
-		if d := e.GetDuration(); d != nil {
-			s.totalDur += d.AsDuration()
-		}
+		s.slowDur += dur
 	}
+}
+
+func isStatement(e *tapv1.QueryEvent) bool {
+	switch proxy.Op(e.GetOp()) {
+	case proxy.OpQuery, proxy.OpExec, proxy.OpExecute:
+		return true
+	case proxy.OpPrepare, proxy.OpBind, proxy.OpBegin, proxy.OpCommit, proxy.OpRollback:
+		return false
+	}
+	return false
 }
 
 func (a *aggregator) result() Result {
 	r := Result{TotalQueries: a.total}
 
-	for q, s := range a.grouped {
+	for _, t := range a.templates {
+		r.TotalDuration += t.TotalDuration
+		r.Templates = append(r.Templates, *t)
+	}
+	slices.SortFunc(r.Templates, func(x, y TemplateStat) int {
+		return cmp.Or(
+			cmp.Compare(y.TotalDuration, x.TotalDuration),
+			cmp.Compare(x.Query, y.Query),
+		)
+	})
+
+	for q, s := range a.problems {
 		if s.nplus1Count > 0 {
 			r.Problems = append(r.Problems, Problem{
 				Kind:  ProblemNPlus1,
@@ -169,7 +227,7 @@ func (a *aggregator) result() Result {
 			})
 		}
 		if s.slowCount > 0 {
-			avg := s.totalDur / time.Duration(s.slowCount)
+			avg := s.slowDur / time.Duration(s.slowCount)
 			r.Problems = append(r.Problems, Problem{
 				Kind:        ProblemSlowQuery,
 				Query:       q,

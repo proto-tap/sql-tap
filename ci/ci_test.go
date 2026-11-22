@@ -3,6 +3,7 @@ package ci_test
 import (
 	"context"
 	"net"
+	"slices"
 	"testing"
 	"time"
 
@@ -199,6 +200,48 @@ func TestAggregate_UsesRawQueryWhenNormalizedEmpty(t *testing.T) {
 	}
 	if result.Problems[0].Query != rawQuery {
 		t.Errorf("Query = %q, want %q", result.Problems[0].Query, rawQuery)
+	}
+}
+
+func TestAggregate_Templates(t *testing.T) {
+	t.Parallel()
+
+	const (
+		users = "SELECT name FROM users WHERE id = ?"
+		posts = "SELECT id FROM posts"
+	)
+	events := []*tapv1.QueryEvent{
+		{Op: int32(proxy.OpBegin), Query: "BEGIN"},
+		{Op: int32(proxy.OpPrepare), Query: users, NormalizedQuery: users},
+		{
+			Op: int32(proxy.OpExecute), Query: users, NormalizedQuery: users,
+			NPlus_1: true, Duration: durationpb.New(10 * time.Millisecond),
+		},
+		{
+			Op: int32(proxy.OpExecute), Query: users, NormalizedQuery: users,
+			NPlus_1: true, Duration: durationpb.New(20 * time.Millisecond),
+		},
+		{
+			Op: int32(proxy.OpQuery), Query: posts, NormalizedQuery: posts,
+			SlowQuery: true, Duration: durationpb.New(150 * time.Millisecond),
+		},
+		{Op: int32(proxy.OpCommit), Query: "COMMIT"},
+	}
+
+	result := ci.Aggregate(events)
+
+	if result.TotalQueries != 6 {
+		t.Errorf("TotalQueries = %d, want 6", result.TotalQueries)
+	}
+	if result.TotalDuration != 180*time.Millisecond {
+		t.Errorf("TotalDuration = %s, want 180ms", result.TotalDuration)
+	}
+	want := []ci.TemplateStat{
+		{Query: posts, Count: 1, TotalDuration: 150 * time.Millisecond, SlowCount: 1},
+		{Query: users, Count: 2, TotalDuration: 30 * time.Millisecond, NPlus1Count: 2},
+	}
+	if !slices.Equal(result.Templates, want) {
+		t.Errorf("Templates = %+v, want %+v", result.Templates, want)
 	}
 }
 
