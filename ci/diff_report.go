@@ -65,7 +65,7 @@ func (c Comparison) Markdown() string {
 	if len(c.Warnings) > 0 {
 		b.WriteString("\n**Warnings:**\n\n")
 		for _, w := range c.Warnings {
-			fmt.Fprintf(&b, "- %s\n", w)
+			fmt.Fprintf(&b, "- %s\n", mdCode(w))
 		}
 	}
 

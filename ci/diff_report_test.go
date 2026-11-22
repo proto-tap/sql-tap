@@ -80,7 +80,14 @@ func TestComparison_Markdown(t *testing.T) {
 	md := regressedComparison().Markdown()
 	assertContains(t, md, "- STATEMENTS: 10 → 11")
 	assertContains(t, md, "- N+1 (new, 6): `SELECT a \\| b FROM t`")
-	assertContains(t, md, "**Warnings:**\n\n- [SLOW] 0 -> 1")
+	assertContains(t, md, "**Warnings:**\n\n- `[SLOW] 0 -> 1`")
+}
+
+func TestComparison_Markdown_WarningIsCode(t *testing.T) {
+	t.Parallel()
+
+	c := ci.Comparison{Warnings: []string{"[SLOW] SELECT `id` FROM t WHERE a < 1  (new, 1)"}}
+	assertContains(t, c.Markdown(), "- `` [SLOW] SELECT `id` FROM t WHERE a < 1  (new, 1) ``\n")
 }
 
 func TestComparison_Markdown_BacktickQuery(t *testing.T) {
