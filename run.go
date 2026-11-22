@@ -95,30 +95,38 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func finishRun(
 	stderr io.Writer, command []string, waitErr error, result ci.Result, collectErr error, format, out string,
 ) int {
+	// A failed command wins over every other outcome, so test failures are never hidden.
+	failure := commandFailure(waitErr)
+	if waitErr != nil && failure == runExitError {
+		_, _ = fmt.Fprintf(stderr, "Error: %s: %v\n", command[0], waitErr)
+	}
+	exit := func(code int) int {
+		if failure != 0 {
+			return failure
+		}
+		return code
+	}
+
 	incomplete := errors.Is(collectErr, ci.ErrDrainLimit) || errors.Is(collectErr, ci.ErrStreamEnded)
 	if collectErr != nil && !incomplete {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", collectErr)
-		return runExitError
+		return exit(runExitError)
 	}
 	result.Command = command
 
 	if err := writeReport(stderr, result, format); err != nil {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-		return runExitError
+		return exit(runExitError)
 	}
 	if out != "" {
 		if err := writeReportFile(out, result); err != nil {
 			_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-			return runExitError
+			return exit(runExitError)
 		}
 	}
 
-	if waitErr != nil {
-		if exitErr, ok := errors.AsType[*exec.ExitError](waitErr); ok && exitErr.ExitCode() > 0 {
-			return exitErr.ExitCode()
-		}
-		_, _ = fmt.Fprintf(stderr, "Error: %s: %v\n", command[0], waitErr)
-		return runExitError
+	if failure != 0 {
+		return failure
 	}
 	if result.Statements() == 0 {
 		_, _ = fmt.Fprintln(stderr, "Error: no statements captured. "+proxyHint)
@@ -135,6 +143,25 @@ func finishRun(
 		return runExitProblems
 	}
 	return runExitOK
+}
+
+// commandFailure returns the exit status to propagate for a failed command, or 0 if it succeeded.
+// A command killed by a signal yields 128 + the signal number, as shells do.
+func commandFailure(waitErr error) int {
+	if waitErr == nil {
+		return 0
+	}
+	exitErr, ok := errors.AsType[*exec.ExitError](waitErr)
+	if !ok {
+		return runExitError
+	}
+	if ws, ok := exitErr.Sys().(syscall.WaitStatus); ok && ws.Signaled() {
+		return 128 + int(ws.Signal())
+	}
+	if code := exitErr.ExitCode(); code > 0 {
+		return code
+	}
+	return runExitError
 }
 
 // forwardSignals relays SIGINT and SIGTERM to p until the returned function is called.

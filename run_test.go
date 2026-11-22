@@ -2,10 +2,13 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -184,5 +187,45 @@ func TestFinishRun_IncompleteMeasurement(t *testing.T) {
 		if !strings.Contains(stderr.String(), "may be incomplete") || !strings.Contains(stderr.String(), "Captured:") {
 			t.Errorf("%v: stderr = %q, want the report and an incompleteness error", collectErr, stderr.String())
 		}
+	}
+}
+
+func commandError(t *testing.T, script string) error {
+	t.Helper()
+	err := exec.CommandContext(t.Context(), "sh", "-c", script).Run() //nolint:gosec // fixed test scripts
+	if err == nil {
+		t.Fatalf("sh -c %q succeeded, want a failure", script)
+	}
+	return err //nolint:wrapcheck // finishRun inspects the *exec.ExitError as returned by Wait
+}
+
+func TestFinishRun_CommandFailureWins(t *testing.T) {
+	t.Parallel()
+
+	clean := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
+	unwritable := filepath.Join(t.TempDir(), "missing", "report.json")
+
+	tests := []struct {
+		name       string
+		script     string
+		collectErr error
+		out        string
+		want       int
+	}{
+		{name: "exit code", script: "exit 3", want: 3},
+		{name: "signal", script: "kill -TERM $$", want: 128 + int(syscall.SIGTERM)},
+		{name: "collect error", script: "exit 3", collectErr: errors.New("recv: boom"), want: 3},
+		{name: "unwritable out", script: "exit 3", out: unwritable, want: 3},
+		{name: "incomplete", script: "exit 3", collectErr: ci.ErrStreamEnded, want: 3},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			waitErr := commandError(t, tt.script)
+			var stderr bytes.Buffer
+			if got := finishRun(&stderr, []string{"sh"}, waitErr, clean, tt.collectErr, "text", tt.out); got != tt.want {
+				t.Errorf("exit code = %d, want %d (stderr: %s)", got, tt.want, stderr.String())
+			}
+		})
 	}
 }
