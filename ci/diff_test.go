@@ -94,6 +94,12 @@ func TestDiff_Regressions(t *testing.T) {
 			opts:   ci.DiffOptions{AllowIncreasePercent: 10},
 		},
 		{
+			name:   "statements increase exactly at allowance",
+			before: result(ci.TemplateStat{Query: qOrders, Count: 100}),
+			after:  result(ci.TemplateStat{Query: qOrders, Count: 113}),
+			opts:   ci.DiffOptions{AllowIncreasePercent: 13},
+		},
+		{
 			name:   "statements increase beyond allowance",
 			before: result(ci.TemplateStat{Query: qOrders, Count: 10}),
 			after:  result(ci.TemplateStat{Query: qOrders, Count: 12}),

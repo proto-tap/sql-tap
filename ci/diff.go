@@ -116,8 +116,10 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 		c.Slow.After += t.SlowCount
 	}
 
-	limit := float64(c.Statements.Before) * (1 + opts.AllowIncreasePercent/100)
-	if float64(c.Statements.After) > limit {
+	// Compare increase*100 with before*percent so that an increase exactly at the allowance is not
+	// rounded into a regression (100 * 1.13 is 112.99999999999999).
+	increase := float64(c.Statements.After - c.Statements.Before)
+	if increase*100 > float64(c.Statements.Before)*opts.AllowIncreasePercent {
 		c.Regressions = append(c.Regressions, Regression{
 			Kind: RegressionStatements, Before: c.Statements.Before, After: c.Statements.After,
 		})
