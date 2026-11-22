@@ -23,6 +23,13 @@ func (c Comparison) Report() string {
 		}
 	}
 
+	if len(c.Warnings) > 0 {
+		b.WriteString("\nWarnings:\n")
+		for _, w := range c.Warnings {
+			fmt.Fprintf(&b, "  %s\n", w)
+		}
+	}
+
 	if !c.HasRegressions() {
 		b.WriteString("\nNo regressions.\n")
 		return b.String()
@@ -54,6 +61,13 @@ func (c Comparison) Markdown() string {
 		}
 	} else {
 		b.WriteString("\nNo regressions.\n")
+	}
+
+	if len(c.Warnings) > 0 {
+		b.WriteString("\n**Warnings:**\n\n")
+		for _, w := range c.Warnings {
+			fmt.Fprintf(&b, "- %s\n", w)
+		}
 	}
 
 	if len(c.Templates) > 0 {
@@ -107,6 +121,7 @@ type jsonComparison struct {
 	TotalMs     jsonDurationDelta  `json:"total_ms"`
 	Templates   []jsonTemplateDiff `json:"templates"`
 	Regressions []jsonRegression   `json:"regressions"`
+	Warnings    []string           `json:"warnings"`
 }
 
 type jsonDelta struct {
@@ -143,6 +158,7 @@ func (c Comparison) MarshalJSON() ([]byte, error) {
 		TotalMs:     jsonDurationDelta{Before: millis(c.DurationBefore), After: millis(c.DurationAfter)},
 		Templates:   make([]jsonTemplateDiff, 0, len(c.Templates)),
 		Regressions: make([]jsonRegression, 0, len(c.Regressions)),
+		Warnings:    append([]string{}, c.Warnings...),
 	}
 	for _, t := range c.Templates {
 		out.Templates = append(out.Templates, jsonTemplateDiff{

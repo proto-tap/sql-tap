@@ -29,6 +29,7 @@ func fixedComparison() ci.Comparison {
 
 func regressedComparison() ci.Comparison {
 	return ci.Comparison{
+		Warnings:   []string{"[SLOW] 0 -> 1"},
 		Statements: ci.Delta{Before: 10, After: 11},
 		NPlus1:     ci.Delta{Before: 0, After: 6},
 		Regressions: []ci.Regression{
@@ -51,6 +52,7 @@ func TestComparison_Report(t *testing.T) {
 	report = regressedComparison().Report()
 	assertContains(t, report, "[STATEMENTS] 10 -> 11")
 	assertContains(t, report, "[N+1] SELECT a | b FROM t  (new, 6)")
+	assertContains(t, report, "Warnings:\n  [SLOW] 0 -> 1")
 	assertContains(t, report, "Exit: 1 (2 regressions)")
 }
 
@@ -78,6 +80,7 @@ func TestComparison_Markdown(t *testing.T) {
 	md := regressedComparison().Markdown()
 	assertContains(t, md, "- STATEMENTS: 10 → 11")
 	assertContains(t, md, "- N+1 (new, 6): `SELECT a \\| b FROM t`")
+	assertContains(t, md, "**Warnings:**\n\n- [SLOW] 0 -> 1")
 }
 
 func TestComparison_Markdown_BacktickQuery(t *testing.T) {
@@ -102,7 +105,8 @@ func TestComparison_MarshalJSON(t *testing.T) {
 		`"statements":{"before":10,"after":11},"n_plus_1":{"before":0,"after":6},"slow":{"before":0,"after":0},` +
 		`"total_ms":{"before":0,"after":0},"templates":[],` +
 		`"regressions":[{"kind":"STATEMENTS","before":10,"after":11},` +
-		`{"kind":"N+1","query":"SELECT a | b FROM t","before":0,"after":6}]}`
+		`{"kind":"N+1","query":"SELECT a | b FROM t","before":0,"after":6}],` +
+		`"warnings":["[SLOW] 0 -\u003e 1"]}`
 	if string(b) != want {
 		t.Errorf("MarshalJSON =\n%s\nwant\n%s", b, want)
 	}

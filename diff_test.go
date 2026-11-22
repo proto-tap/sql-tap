@@ -11,8 +11,13 @@ import (
 
 func writeTestReport(t *testing.T, name string, templates ...ci.TemplateStat) string {
 	t.Helper()
+	return writeTestReportWithCommand(t, name, nil, templates...)
+}
+
+func writeTestReportWithCommand(t *testing.T, name string, command []string, templates ...ci.TemplateStat) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
-	if err := writeReportFile(path, ci.Result{Templates: templates}); err != nil {
+	if err := writeReportFile(path, ci.Result{Command: command, Templates: templates}); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -26,6 +31,10 @@ func TestRunDiff(t *testing.T) {
 	same := writeTestReport(t, "same.json", ci.TemplateStat{Query: q, Count: 10})
 	more := writeTestReport(t, "more.json", ci.TemplateStat{Query: q, Count: 11})
 	empty := writeTestReport(t, "empty.json")
+	cmdAll := writeTestReportWithCommand(t, "all.json", []string{"go", "test", "./..."},
+		ci.TemplateStat{Query: q, Count: 10})
+	cmdOne := writeTestReportWithCommand(t, "one.json", []string{"go", "test", "./order/..."},
+		ci.TemplateStat{Query: q, Count: 10})
 
 	tests := []struct {
 		name       string
@@ -44,6 +53,9 @@ func TestRunDiff(t *testing.T) {
 		{name: "unknown format", args: []string{"-format=html", base, same}, wantCode: 2, wantStderr: "unknown -format"},
 		{name: "wrong arg count", args: []string{base}, wantCode: 2, wantStderr: "Usage:"},
 		{name: "help", args: []string{"-h"}, wantCode: 0, wantStderr: "Exit codes:"},
+		{name: "command mismatch", args: []string{cmdAll, cmdOne}, wantCode: 2, wantStderr: "-allow-command-mismatch"},
+		{name: "command mismatch allowed", args: []string{"-allow-command-mismatch", cmdAll, cmdOne}, wantCode: 0,
+			wantStdout: "commands differ"},
 	}
 
 	for _, tt := range tests {

@@ -3,6 +3,7 @@ package ci_test
 import (
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -152,6 +153,56 @@ func TestDiff_NoStatements(t *testing.T) {
 			_, err := ci.Diff(tt.before, tt.after, ci.DiffOptions{})
 			if !errors.Is(err, ci.ErrNoStatements) {
 				t.Errorf("err = %v, want ErrNoStatements", err)
+			}
+		})
+	}
+}
+
+func TestDiff_Commands(t *testing.T) {
+	t.Parallel()
+
+	withCommand := func(cmd ...string) ci.Result {
+		r := result(ci.TemplateStat{Query: qOrders, Count: 1})
+		r.Command = cmd
+		return r
+	}
+	all := withCommand("go", "test", "./...")
+	order := withCommand("go", "test", "./order/...")
+	none := withCommand()
+
+	tests := []struct {
+		name          string
+		before, after ci.Result
+		opts          ci.DiffOptions
+		wantErr       error
+		wantWarning   string
+	}{
+		{name: "same", before: all, after: all},
+		{name: "different", before: all, after: order, wantErr: ci.ErrCommandMismatch},
+		{name: "different but allowed", before: all, after: order, opts: ci.DiffOptions{AllowCommandMismatch: true},
+			wantWarning: `commands differ: before "go test ./...", after "go test ./order/..."`},
+		{name: "before missing", before: none, after: all, wantWarning: "before report does not record its command"},
+		{name: "after missing", before: all, after: none, wantWarning: "after report does not record its command"},
+		{name: "both missing", before: none, after: none, wantWarning: "neither report records its command"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c, err := ci.Diff(tt.before, tt.after, tt.opts)
+			if !errors.Is(err, tt.wantErr) {
+				t.Fatalf("err = %v, want %v", err, tt.wantErr)
+			}
+			if tt.wantErr != nil {
+				return
+			}
+			if tt.wantWarning == "" {
+				if len(c.Warnings) != 0 {
+					t.Errorf("Warnings = %q, want none", c.Warnings)
+				}
+				return
+			}
+			if !slices.ContainsFunc(c.Warnings, func(w string) bool { return strings.HasPrefix(w, tt.wantWarning) }) {
+				t.Errorf("Warnings = %q, want one starting with %q", c.Warnings, tt.wantWarning)
 			}
 		})
 	}

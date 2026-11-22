@@ -28,6 +28,8 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	}
 	format := fs.String("format", "text", "output format: text, markdown or json")
 	allowIncrease := fs.Float64("allow-increase", 0, "tolerated statement count increase in percent")
+	allowCommandMismatch := fs.Bool("allow-command-mismatch", false,
+		"compare reports measured with different commands, with a warning")
 
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -55,11 +57,17 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 		return diffExitError
 	}
 
-	c, err := ci.Diff(before, after, ci.DiffOptions{AllowIncreasePercent: *allowIncrease})
+	c, err := ci.Diff(before, after, ci.DiffOptions{
+		AllowIncreasePercent: *allowIncrease,
+		AllowCommandMismatch: *allowCommandMismatch,
+	})
 	if err != nil {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
-		if errors.Is(err, ci.ErrNoStatements) {
+		switch {
+		case errors.Is(err, ci.ErrNoStatements):
 			_, _ = fmt.Fprintln(stderr, proxyHint)
+		case errors.Is(err, ci.ErrCommandMismatch):
+			_, _ = fmt.Fprintln(stderr, "Measure both reports with the same command, or pass -allow-command-mismatch.")
 		}
 		return diffExitError
 	}
