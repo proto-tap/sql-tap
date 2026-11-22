@@ -257,6 +257,8 @@ DATABASE_URL="postgres://user:pass@localhost:5433/db?sslmode=disable" \
 
 The command keeps its stdin / stdout / stderr, and the report is written to stderr. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
 
+The command runs in its own process group, and SIGINT / SIGTERM sent to `sql-tap run` are forwarded to the whole group, so processes it spawns (such as test binaries under `go test`) stop as well. Because the group is not the terminal's foreground group, a command that reads from a terminal stdin is stopped; `run` is meant for non-interactive commands.
+
 | Flag                 | Default | Description                                                           |
 |----------------------|---------|-----------------------------------------------------------------------|
 | `-format`            | `text`  | Report format on stderr: `text` or `json`                             |

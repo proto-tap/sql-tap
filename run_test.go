@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"errors"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -228,4 +230,41 @@ func TestFinishRun_CommandFailureWins(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSignalGroup_ReachesGrandchildren(t *testing.T) {
+	t.Parallel()
+
+	// sh prints the pid of a background sleep (a grandchild of sql-tap) and waits for it.
+	cmd := newCommand(t.Context(), []string{"sh", "-c", "sleep 30 & echo $!; wait"}, nil, nil, nil)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	line, err := bufio.NewReader(stdout).ReadString('\n')
+	if err != nil {
+		t.Fatal(err)
+	}
+	grandchild, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = syscall.Kill(grandchild, syscall.SIGKILL) })
+
+	if err := signalGroup(cmd.Process.Pid, syscall.SIGTERM); err != nil {
+		t.Fatal(err)
+	}
+	_ = cmd.Wait()
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if err := syscall.Kill(grandchild, 0); errors.Is(err, syscall.ESRCH) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Errorf("grandchild %d is still running after SIGTERM to the group", grandchild)
 }

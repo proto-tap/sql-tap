@@ -64,14 +64,13 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		return runExitError
 	}
 
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...) //nolint:gosec // running the user's command is the purpose
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+	cmd := newCommand(ctx, command, stdin, stdout, stderr)
 	if err := cmd.Start(); err != nil {
 		w.Close()
 		_, _ = fmt.Fprintf(stderr, "Error: start %s: %v\n", command[0], err)
 		return runExitError
 	}
-	stopForwarding := forwardSignals(cmd.Process)
+	stopForwarding := forwardSignals(cmd.Process.Pid)
 
 	stop := make(chan struct{})
 	type collected struct {
@@ -164,8 +163,26 @@ func commandFailure(waitErr error) int {
 	return runExitError
 }
 
-// forwardSignals relays SIGINT and SIGTERM to p until the returned function is called.
-func forwardSignals(p *os.Process) func() {
+// newCommand runs the command in its own process group, so that signals can reach every process it
+// spawns (e.g. test binaries under `go test`). The group is not the terminal's foreground group,
+// so a command reading from a terminal stdin is stopped by SIGTTIN.
+func newCommand(ctx context.Context, command []string, stdin io.Reader, stdout, stderr io.Writer) *exec.Cmd {
+	cmd := exec.CommandContext(ctx, command[0], command[1:]...) //nolint:gosec // running the user's command is the purpose
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdin, stdout, stderr
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	return cmd
+}
+
+// signalGroup sends sig to every process in the process group led by pgid.
+func signalGroup(pgid int, sig syscall.Signal) error {
+	if err := syscall.Kill(-pgid, sig); err != nil {
+		return fmt.Errorf("signal process group %d: %w", pgid, err)
+	}
+	return nil
+}
+
+// forwardSignals relays SIGINT and SIGTERM to the process group pgid until the returned function is called.
+func forwardSignals(pgid int) func() {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
 	done := make(chan struct{})
@@ -173,7 +190,9 @@ func forwardSignals(p *os.Process) func() {
 		for {
 			select {
 			case sig := <-ch:
-				_ = p.Signal(sig)
+				if s, ok := sig.(syscall.Signal); ok {
+					_ = signalGroup(pgid, s)
+				}
 			case <-done:
 				return
 			}
