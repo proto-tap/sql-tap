@@ -137,6 +137,20 @@ func TestSubscribe_TimesOutWithoutConfirmation(t *testing.T) {
 	}
 }
 
+func TestSubscribe_TimeoutCoversConnecting(t *testing.T) {
+	t.Parallel()
+
+	// Nothing listens on port 1, so the timeout must also bound connection setup.
+	start := time.Now()
+	_, err := ci.Subscribe(t.Context(), "localhost:1", 200*time.Millisecond)
+	if err == nil {
+		t.Fatal("expected an error for an unreachable address")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Errorf("Subscribe took %s, want it bounded by the timeout", elapsed)
+	}
+}
+
 func TestSubscribe_ConfirmedByRealServer(t *testing.T) {
 	t.Parallel()
 

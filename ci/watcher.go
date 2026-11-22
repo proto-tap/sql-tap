@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 
 	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
 	"github.com/proto-tap/sql-tap/server"
@@ -39,14 +38,20 @@ type Watcher struct {
 // Subscribe connects to sql-tapd at addr and waits up to timeout for it to confirm the subscription.
 func Subscribe(ctx context.Context, addr string, timeout time.Duration) (Watcher, error) {
 	ctx, cancel := context.WithCancel(ctx)
+	timer := time.AfterFunc(timeout, cancel)
+
 	conn, stream, err := watch(ctx, addr)
+	if err == nil {
+		err = waitSubscribed(stream)
+	}
+	if !timer.Stop() {
+		err = fmt.Errorf("no subscription confirmation within %s: %w", timeout, errNotConfirmed)
+	}
 	if err != nil {
 		cancel()
-		return Watcher{}, err
-	}
-	if err := waitSubscribed(stream, timeout); err != nil {
-		cancel()
-		_ = conn.Close()
+		if conn != nil {
+			closeInBackground(conn)
+		}
 		return Watcher{}, fmt.Errorf("%s: %w", addr, err)
 	}
 	return Watcher{conn: conn, stream: stream, cancel: cancel}, nil
@@ -115,27 +120,13 @@ func (w Watcher) Close() {
 	_ = w.conn.Close()
 }
 
-func waitSubscribed(stream tapv1.TapService_WatchClient, timeout time.Duration) error {
-	type header struct {
-		md  metadata.MD
-		err error
+func waitSubscribed(stream tapv1.TapService_WatchClient) error {
+	md, err := stream.Header()
+	if err != nil {
+		return fmt.Errorf("wait for subscription: %w", err)
 	}
-	ch := make(chan header, 1)
-	go func() {
-		md, err := stream.Header()
-		ch <- header{md: md, err: err}
-	}()
-
-	select {
-	case h := <-ch:
-		if h.err != nil {
-			return fmt.Errorf("wait for subscription: %w", h.err)
-		}
-		if len(h.md.Get(server.SubscribedHeader)) == 0 {
-			return errNotConfirmed
-		}
-		return nil
-	case <-time.After(timeout):
-		return fmt.Errorf("no subscription confirmation within %s: %w", timeout, errNotConfirmed)
+	if len(md.Get(server.SubscribedHeader)) == 0 {
+		return errNotConfirmed
 	}
+	return nil
 }

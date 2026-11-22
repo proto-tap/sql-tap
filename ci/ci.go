@@ -126,10 +126,16 @@ func watch(ctx context.Context, addr string) (*grpc.ClientConn, tapv1.TapService
 	client := tapv1.NewTapServiceClient(conn)
 	stream, err := client.Watch(ctx, &tapv1.WatchRequest{})
 	if err != nil {
-		_ = conn.Close()
+		closeInBackground(conn)
 		return nil, nil, fmt.Errorf("watch %s: %w", addr, err)
 	}
 	return conn, stream, nil
+}
+
+// closeInBackground closes conn without waiting:
+// Close can block for seconds while a dial to an unreachable address is still in flight.
+func closeInBackground(conn *grpc.ClientConn) {
+	go func() { _ = conn.Close() }()
 }
 
 func collect(ctx context.Context, stream tapv1.TapService_WatchClient) (Result, error) {
