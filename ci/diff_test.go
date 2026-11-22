@@ -2,6 +2,7 @@ package ci_test
 
 import (
 	"errors"
+	"math"
 	"slices"
 	"strings"
 	"testing"
@@ -224,5 +225,16 @@ func TestDiff_Commands(t *testing.T) {
 				t.Errorf("Warnings = %q, want one starting with %q", c.Warnings, tt.wantWarning)
 			}
 		})
+	}
+}
+
+func TestDiff_InvalidAllowance(t *testing.T) {
+	t.Parallel()
+
+	r := result(ci.TemplateStat{Query: qOrders, Count: 10})
+	for _, p := range []float64{-1, math.NaN(), math.Inf(1), math.Inf(-1)} {
+		if _, err := ci.Diff(r, r, ci.DiffOptions{AllowIncreasePercent: p}); !errors.Is(err, ci.ErrInvalidAllowance) {
+			t.Errorf("AllowIncreasePercent=%v: err = %v, want ErrInvalidAllowance", p, err)
+		}
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -16,6 +17,9 @@ var ErrNoStatements = errors.New("no statements captured")
 // ErrCommandMismatch is returned by Diff when both reports record different commands,
 // so their numbers are not comparable.
 var ErrCommandMismatch = errors.New("reports were measured with different commands")
+
+// ErrInvalidAllowance is returned by Diff when AllowIncreasePercent is negative or not finite.
+var ErrInvalidAllowance = errors.New("allowed increase must be a finite, non-negative percentage")
 
 // DiffOptions controls what Diff treats as a regression.
 type DiffOptions struct {
@@ -81,6 +85,9 @@ func (c Comparison) HasRegressions() bool {
 
 // Diff compares two results and reports regressions from before to after.
 func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
+	if p := opts.AllowIncreasePercent; p < 0 || math.IsNaN(p) || math.IsInf(p, 0) {
+		return Comparison{}, fmt.Errorf("%w: %v", ErrInvalidAllowance, p)
+	}
 	if before.Statements() == 0 {
 		return Comparison{}, fmt.Errorf("before: %w", ErrNoStatements)
 	}
