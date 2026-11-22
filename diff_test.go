@@ -49,6 +49,8 @@ func TestRunDiff(t *testing.T) {
 		{name: "allowed increase", args: []string{"-allow-increase=10", base, more}, wantCode: 0},
 		{name: "markdown", args: []string{"-format=markdown", base, same}, wantCode: 0, wantStdout: "### sql-tap diff"},
 		{name: "json", args: []string{"-format=json", base, more}, wantCode: 1, wantStdout: `"kind": "STATEMENTS"`},
+		{name: "json keeps arrows", args: []string{"-format=json", base, slow}, wantCode: 0,
+			wantStdout: `"[SLOW] 0 -> 1"`},
 		{name: "no statements", args: []string{base, empty}, wantCode: 2, wantStderr: "proxy port"},
 		{name: "missing file", args: []string{base, "nonexistent.json"}, wantCode: 2, wantStderr: "open nonexistent.json"},
 		{name: "unknown format", args: []string{"-format=html", base, same}, wantCode: 2, wantStderr: "unknown -format"},

@@ -1,6 +1,7 @@
 package ci
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -65,11 +66,22 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			AvgMs: millis(p.AvgDuration),
 		})
 	}
-	b, err := json.Marshal(rep)
+	b, err := marshalUnescaped(rep)
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}
 	return b, nil
+}
+
+// marshalUnescaped is json.Marshal without HTML escaping, so that SQL like `a > ?` stays readable.
+func marshalUnescaped(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, fmt.Errorf("encode: %w", err)
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 // DecodeReport reads a JSON report written by Result.MarshalJSON.

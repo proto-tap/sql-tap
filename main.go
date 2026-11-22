@@ -121,6 +121,7 @@ func writeReport(w io.Writer, r ci.Result, format string) error {
 		return nil
 	}
 	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
 	if err := enc.Encode(r); err != nil {
 		return fmt.Errorf("encode report: %w", err)

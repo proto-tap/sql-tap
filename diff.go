@@ -106,6 +106,7 @@ func writeComparison(w io.Writer, c ci.Comparison, format string) error {
 		_, err = io.WriteString(w, c.Markdown())
 	case "json":
 		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(false)
 		enc.SetIndent("", "  ")
 		err = enc.Encode(c)
 	default:

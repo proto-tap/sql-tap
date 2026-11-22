@@ -1,7 +1,6 @@
 package ci
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -171,7 +170,7 @@ func (c Comparison) MarshalJSON() ([]byte, error) {
 	for _, r := range c.Regressions {
 		out.Regressions = append(out.Regressions, jsonRegression(r))
 	}
-	b, err := json.Marshal(out)
+	b, err := marshalUnescaped(out)
 	if err != nil {
 		return nil, fmt.Errorf("marshal comparison: %w", err)
 	}
