@@ -13,6 +13,7 @@ const SchemaVersion = 1
 type jsonReport struct {
 	Version      int            `json:"version"`
 	TotalQueries int            `json:"total_queries"`
+	Statements   int            `json:"statements"`
 	TotalMs      float64        `json:"total_ms"`
 	Templates    []jsonTemplate `json:"templates"`
 	Problems     []jsonProblem  `json:"problems"`
@@ -38,6 +39,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 	rep := jsonReport{
 		Version:      SchemaVersion,
 		TotalQueries: r.TotalQueries,
+		Statements:   r.Statements(),
 		TotalMs:      millis(r.TotalDuration),
 		Templates:    make([]jsonTemplate, 0, len(r.Templates)),
 		Problems:     make([]jsonProblem, 0, len(r.Problems)),

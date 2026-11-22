@@ -233,6 +233,9 @@ func TestAggregate_Templates(t *testing.T) {
 	if result.TotalQueries != 6 {
 		t.Errorf("TotalQueries = %d, want 6", result.TotalQueries)
 	}
+	if got := result.Statements(); got != 3 {
+		t.Errorf("Statements() = %d, want 3", got)
+	}
 	if result.TotalDuration != 180*time.Millisecond {
 		t.Errorf("TotalDuration = %s, want 180ms", result.TotalDuration)
 	}

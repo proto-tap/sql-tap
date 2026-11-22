@@ -40,6 +40,15 @@ type TemplateStat struct {
 	SlowCount     int
 }
 
+// Statements returns the number of statements counted in Templates.
+func (r Result) Statements() int {
+	n := 0
+	for _, t := range r.Templates {
+		n += t.Count
+	}
+	return n
+}
+
 // HasProblems reports whether any issues were detected.
 func (r Result) HasProblems() bool {
 	return len(r.Problems) > 0

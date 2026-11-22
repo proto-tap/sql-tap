@@ -79,6 +79,10 @@ func runCIExitCode(addr, format, out string) int {
 		return 1
 	}
 
+	if result.Statements() == 0 {
+		fmt.Fprintln(os.Stderr, noStatementsWarning)
+	}
+
 	if err := writeReport(os.Stdout, result, format); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		return 1
@@ -95,6 +99,9 @@ func runCIExitCode(addr, format, out string) int {
 	}
 	return 0
 }
+
+const noStatementsWarning = "Warning: no statements captured. " +
+	"Check that your application connects through the sql-tapd proxy port, not the database port."
 
 func writeReport(w io.Writer, r ci.Result, format string) error {
 	if format == "text" {
