@@ -23,7 +23,8 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 	fs.Usage = func() {
 		_, _ = fmt.Fprintf(stderr, "sql-tap diff — Compare two CI reports written by -out\n\n"+
 			"Usage:\n  sql-tap diff [flags] <before.json> <after.json>\n\n"+
-			"Exit codes: 0 no regressions, 1 regressions found, 2 error or no statements captured\n\nFlags:\n")
+			"Exit codes: 0 no regressions, 1 regressions found,\n"+
+			"2 error (no statements captured, reports measured with different commands)\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 	format := fs.String("format", "text", "output format: text, markdown or json")
