@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -59,6 +60,15 @@ func TestResult_Report_NoProblems(t *testing.T) {
 
 	assertContains(t, report, "Captured: 42 queries")
 	assertContains(t, report, "No problems found.")
+}
+
+func TestResult_Report_Command(t *testing.T) {
+	t.Parallel()
+
+	assertContains(t, ci.Result{Command: []string{"go", "test", "./..."}}.Report(), "Command:  go test ./...")
+	if report := (ci.Result{}).Report(); strings.Contains(report, "Command:") {
+		t.Errorf("report without command should omit the Command line, got:\n%s", report)
+	}
 }
 
 func TestResult_Report_WithProblems(t *testing.T) {

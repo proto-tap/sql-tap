@@ -22,6 +22,8 @@ import (
 
 // Result holds the CI run outcome.
 type Result struct {
+	// Command is the measured command, set by `sql-tap run`. It is empty for -ci.
+	Command      []string
 	TotalQueries int
 	// TotalDuration sums the durations of statements counted in Templates.
 	TotalDuration time.Duration
@@ -76,6 +78,9 @@ func (r Result) Report() string {
 	var b strings.Builder
 	b.WriteString("sql-tap CI Report\n")
 	b.WriteString("=================\n")
+	if len(r.Command) > 0 {
+		fmt.Fprintf(&b, "Command:  %s\n", strings.Join(r.Command, " "))
+	}
 	fmt.Fprintf(&b, "Captured: %d queries\n", r.TotalQueries)
 
 	if !r.HasProblems() {
