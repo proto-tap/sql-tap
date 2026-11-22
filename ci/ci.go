@@ -103,19 +103,28 @@ func (r Result) Report() string {
 // Run connects to the gRPC server at addr, collects query events until ctx is
 // cancelled or the server closes the stream, and returns the aggregated result.
 func Run(ctx context.Context, addr string) (Result, error) {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, stream, err := watch(ctx, addr)
 	if err != nil {
-		return Result{}, fmt.Errorf("dial %s: %w", addr, err)
+		return Result{}, err
 	}
 	defer func() { _ = conn.Close() }()
+
+	return collect(ctx, stream)
+}
+
+func watch(ctx context.Context, addr string) (*grpc.ClientConn, tapv1.TapService_WatchClient, error) {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
 
 	client := tapv1.NewTapServiceClient(conn)
 	stream, err := client.Watch(ctx, &tapv1.WatchRequest{})
 	if err != nil {
-		return Result{}, fmt.Errorf("watch %s: %w", addr, err)
+		_ = conn.Close()
+		return nil, nil, fmt.Errorf("watch %s: %w", addr, err)
 	}
-
-	return collect(ctx, stream)
+	return conn, stream, nil
 }
 
 func collect(ctx context.Context, stream tapv1.TapService_WatchClient) (Result, error) {
