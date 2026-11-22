@@ -3,6 +3,8 @@ package ci
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"math"
 	"time"
 )
 
@@ -68,6 +70,45 @@ func (r Result) MarshalJSON() ([]byte, error) {
 	return b, nil
 }
 
+// DecodeReport reads a JSON report written by Result.MarshalJSON.
+// Reports with a different SchemaVersion are rejected.
+func DecodeReport(r io.Reader) (Result, error) {
+	var rep jsonReport
+	if err := json.NewDecoder(r).Decode(&rep); err != nil {
+		return Result{}, fmt.Errorf("decode report: %w", err)
+	}
+	if rep.Version != SchemaVersion {
+		return Result{}, fmt.Errorf("unsupported report version %d (want %d)", rep.Version, SchemaVersion)
+	}
+
+	res := Result{
+		TotalQueries:  rep.TotalQueries,
+		TotalDuration: fromMillis(rep.TotalMs),
+	}
+	for _, t := range rep.Templates {
+		res.Templates = append(res.Templates, TemplateStat{
+			Query:         t.Query,
+			Count:         t.Count,
+			TotalDuration: fromMillis(t.TotalMs),
+			NPlus1Count:   t.NPlus1Count,
+			SlowCount:     t.SlowCount,
+		})
+	}
+	for _, p := range rep.Problems {
+		res.Problems = append(res.Problems, Problem{
+			Kind:        p.Kind,
+			Query:       p.Query,
+			Count:       p.Count,
+			AvgDuration: fromMillis(p.AvgMs),
+		})
+	}
+	return res, nil
+}
+
 func millis(d time.Duration) float64 {
 	return float64(d.Microseconds()) / 1000
+}
+
+func fromMillis(ms float64) time.Duration {
+	return time.Duration(math.Round(ms*1000)) * time.Microsecond
 }

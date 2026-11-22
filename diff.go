@@ -1,0 +1,107 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"flag"
+	"fmt"
+	"io"
+	"os"
+
+	"github.com/proto-tap/sql-tap/ci"
+)
+
+const (
+	diffExitOK         = 0
+	diffExitRegression = 1
+	diffExitError      = 2
+)
+
+func runDiff(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("sql-tap diff", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	fs.Usage = func() {
+		_, _ = fmt.Fprintf(stderr, "sql-tap diff — Compare two CI reports written by -out\n\n"+
+			"Usage:\n  sql-tap diff [flags] <before.json> <after.json>\n\n"+
+			"Exit codes: 0 no regressions, 1 regressions found, 2 error or no statements captured\n\nFlags:\n")
+		fs.PrintDefaults()
+	}
+	format := fs.String("format", "text", "output format: text, markdown or json")
+	allowIncrease := fs.Float64("allow-increase", 0, "tolerated statement count increase in percent")
+
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			return diffExitOK
+		}
+		return diffExitError
+	}
+	if fs.NArg() != 2 {
+		fs.Usage()
+		return diffExitError
+	}
+	if *format != "text" && *format != "markdown" && *format != "json" {
+		_, _ = fmt.Fprintf(stderr, "Error: unknown -format %q (want text, markdown or json)\n", *format)
+		return diffExitError
+	}
+
+	before, err := readReport(fs.Arg(0))
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		return diffExitError
+	}
+	after, err := readReport(fs.Arg(1))
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		return diffExitError
+	}
+
+	c, err := ci.Diff(before, after, ci.DiffOptions{AllowIncreasePercent: *allowIncrease})
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		if errors.Is(err, ci.ErrNoStatements) {
+			_, _ = fmt.Fprintln(stderr, proxyHint)
+		}
+		return diffExitError
+	}
+
+	if err := writeComparison(stdout, c, *format); err != nil {
+		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)
+		return diffExitError
+	}
+	if c.HasRegressions() {
+		return diffExitRegression
+	}
+	return diffExitOK
+}
+
+func readReport(path string) (ci.Result, error) {
+	f, err := os.Open(path) //nolint:gosec // path is given by the user as an argument
+	if err != nil {
+		return ci.Result{}, fmt.Errorf("open %s: %w", path, err)
+	}
+	defer func() { _ = f.Close() }()
+
+	r, err := ci.DecodeReport(f)
+	if err != nil {
+		return ci.Result{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return r, nil
+}
+
+func writeComparison(w io.Writer, c ci.Comparison, format string) error {
+	var err error
+	switch format {
+	case "markdown":
+		_, err = io.WriteString(w, c.Markdown())
+	case "json":
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		err = enc.Encode(c)
+	default:
+		_, err = io.WriteString(w, c.Report())
+	}
+	if err != nil {
+		return fmt.Errorf("write comparison: %w", err)
+	}
+	return nil
+}

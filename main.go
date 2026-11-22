@@ -19,9 +19,14 @@ import (
 var version = "dev"
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "diff" {
+		os.Exit(runDiff(os.Args[2:], os.Stdout, os.Stderr))
+	}
+
 	fs := flag.NewFlagSet("sql-tap", flag.ExitOnError)
 	fs.Usage = func() {
-		fmt.Fprintf(os.Stderr, "sql-tap — Watch SQL traffic in real-time\n\nUsage:\n  sql-tap [flags] <addr>\n\nFlags:\n")
+		fmt.Fprintf(os.Stderr, "sql-tap — Watch SQL traffic in real-time\n\n"+
+			"Usage:\n  sql-tap [flags] <addr>\n  sql-tap diff [flags] <before.json> <after.json>\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 
@@ -80,7 +85,7 @@ func runCIExitCode(addr, format, out string) int {
 	}
 
 	if result.Statements() == 0 {
-		fmt.Fprintln(os.Stderr, noStatementsWarning)
+		fmt.Fprintln(os.Stderr, "Warning: no statements captured. "+proxyHint)
 	}
 
 	if err := writeReport(os.Stdout, result, format); err != nil {
@@ -100,8 +105,7 @@ func runCIExitCode(addr, format, out string) int {
 	return 0
 }
 
-const noStatementsWarning = "Warning: no statements captured. " +
-	"Check that your application connects through the sql-tapd proxy port, not the database port."
+const proxyHint = "Check that your application connects through the sql-tapd proxy port, not the database port."
 
 func writeReport(w io.Writer, r ci.Result, format string) error {
 	if format == "text" {
