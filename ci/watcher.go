@@ -16,6 +16,10 @@ import (
 // so the result may be incomplete.
 var ErrDrainLimit = errors.New("events kept arriving until the drain limit")
 
+// ErrStreamEnded is returned by Collect together with the result when sql-tapd ended the stream
+// before stop was closed, so events after that point were not captured.
+var ErrStreamEnded = errors.New("sql-tapd ended the stream before measurement finished")
+
 var errNotConfirmed = errors.New("sql-tapd did not confirm the subscription; it may be older than this sql-tap")
 
 // Drain controls how long Collect keeps receiving after stop is closed,
@@ -60,6 +64,8 @@ func Subscribe(ctx context.Context, addr string, timeout time.Duration) (Watcher
 // Collect aggregates events until the stream ends or the context given to Subscribe is cancelled.
 // Once stop is closed, it keeps receiving as configured by d, then closes the connection.
 // If draining hits d.Max, it returns the result along with ErrDrainLimit.
+// If the stream ends while stop is still open, it returns the result along with ErrStreamEnded;
+// pass a nil stop to collect until the stream ends.
 func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	defer w.Close()
 
@@ -92,6 +98,9 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		case r := <-recv:
 			if r.err != nil {
 				if isStreamDone(w.stream.Context(), r.err) {
+					if stop != nil {
+						return a.result(), ErrStreamEnded
+					}
 					return a.result(), nil
 				}
 				return Result{}, fmt.Errorf("recv: %w", r.err)

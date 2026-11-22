@@ -29,7 +29,7 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 			"Usage:\n  sql-tap run [flags] <addr> -- <command> [args...]\n\n"+
 			"The report is written to stderr; the command keeps stdin/stdout/stderr.\n"+
 			"Exit codes: the command's exit code if it fails; otherwise 0 clean, 1 problems found,\n"+
-			"2 error (no statements captured, subscription not confirmed, drain limit reached)\n\nFlags:\n")
+			"2 error (no statements captured, subscription not confirmed, incomplete measurement)\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 	format := fs.String("format", "text", "report format on stderr: text or json")
@@ -95,8 +95,8 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 func finishRun(
 	stderr io.Writer, command []string, waitErr error, result ci.Result, collectErr error, format, out string,
 ) int {
-	drainLimited := errors.Is(collectErr, ci.ErrDrainLimit)
-	if collectErr != nil && !drainLimited {
+	incomplete := errors.Is(collectErr, ci.ErrDrainLimit) || errors.Is(collectErr, ci.ErrStreamEnded)
+	if collectErr != nil && !incomplete {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", collectErr)
 		return runExitError
 	}
@@ -124,9 +124,11 @@ func finishRun(
 		_, _ = fmt.Fprintln(stderr, "Error: no statements captured. "+proxyHint)
 		return runExitError
 	}
-	if drainLimited {
-		_, _ = fmt.Fprintf(stderr, "Error: %v; the report may be incomplete. "+
-			"Check whether another application is using the same sql-tapd.\n", collectErr)
+	if incomplete {
+		_, _ = fmt.Fprintf(stderr, "Error: %v; the report may be incomplete.\n", collectErr)
+		if errors.Is(collectErr, ci.ErrDrainLimit) {
+			_, _ = fmt.Fprintln(stderr, "Check whether another application is using the same sql-tapd.")
+		}
 		return runExitError
 	}
 	if result.HasProblems() {

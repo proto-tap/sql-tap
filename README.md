@@ -270,7 +270,7 @@ Exit codes:
 - The command's own exit code if it fails, so test failures are never hidden
 - `0`: no problems
 - `1`: N+1 or slow queries found
-- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or events kept arriving until `-drain-max` (another application may be using the same sql-tapd)
+- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd)
 
 ### Comparing reports
 

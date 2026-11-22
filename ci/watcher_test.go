@@ -88,6 +88,24 @@ func TestCollect_StreamEnds(t *testing.T) {
 	}
 }
 
+func TestCollect_StreamEndsBeforeStop(t *testing.T) {
+	t.Parallel()
+
+	addr := startFakeServer(t, fakeTapService{confirm: true, count: 2})
+
+	w, err := ci.Subscribe(t.Context(), addr, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := w.Collect(make(chan struct{}), ci.Drain{Idle: time.Second, Max: 5 * time.Second})
+	if !errors.Is(err, ci.ErrStreamEnded) {
+		t.Fatalf("err = %v, want ErrStreamEnded", err)
+	}
+	if got := r.Statements(); got != 2 {
+		t.Errorf("Statements() = %d, want the partial result of 2", got)
+	}
+}
+
 func TestCollect_DrainsInFlightEventsAfterStop(t *testing.T) {
 	t.Parallel()
 
