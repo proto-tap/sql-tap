@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"syscall"
@@ -26,6 +28,8 @@ func main() {
 	showVersion := fs.Bool("version", false, "show version and exit")
 	ciMode := fs.Bool("ci", false,
 		"run in CI mode: collect events until SIGTERM/SIGINT or stream ends, then report and exit")
+	format := fs.String("format", "text", "CI report format on stdout: text or json")
+	out := fs.String("out", "", "also write the CI report as JSON to this file")
 
 	_ = fs.Parse(os.Args[1:])
 
@@ -41,7 +45,7 @@ func main() {
 
 	addr := fs.Arg(0)
 	if *ciMode {
-		runCI(addr)
+		runCI(addr, *format, *out)
 	} else {
 		monitor(addr)
 	}
@@ -56,11 +60,16 @@ func monitor(addr string) {
 	}
 }
 
-func runCI(addr string) {
-	os.Exit(runCIExitCode(addr))
+func runCI(addr, format, out string) {
+	os.Exit(runCIExitCode(addr, format, out))
 }
 
-func runCIExitCode(addr string) int {
+func runCIExitCode(addr, format, out string) int {
+	if format != "text" && format != "json" {
+		fmt.Fprintf(os.Stderr, "Error: unknown -format %q (want text or json)\n", format)
+		return 1
+	}
+
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -70,10 +79,49 @@ func runCIExitCode(addr string) int {
 		return 1
 	}
 
-	fmt.Fprint(os.Stdout, result.Report())
+	if err := writeReport(os.Stdout, result, format); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return 1
+	}
+	if out != "" {
+		if err := writeReportFile(out, result); err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			return 1
+		}
+	}
 
 	if result.HasProblems() {
 		return 1
 	}
 	return 0
+}
+
+func writeReport(w io.Writer, r ci.Result, format string) error {
+	if format == "text" {
+		if _, err := io.WriteString(w, r.Report()); err != nil {
+			return fmt.Errorf("write report: %w", err)
+		}
+		return nil
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(r); err != nil {
+		return fmt.Errorf("encode report: %w", err)
+	}
+	return nil
+}
+
+func writeReportFile(path string, r ci.Result) error {
+	f, err := os.Create(path) //nolint:gosec // path is given by the user via -out
+	if err != nil {
+		return fmt.Errorf("create %s: %w", path, err)
+	}
+	if err := writeReport(f, r, "json"); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return fmt.Errorf("close %s: %w", path, err)
+	}
+	return nil
 }
