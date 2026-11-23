@@ -24,7 +24,7 @@ Pick the narrowest command that exercises the code you are changing, and use exa
 sql-tap run -out=<tmp>/before.json <addr> -- go test -count=1 ./order/...
 ```
 
-Write reports to a scratch location, not into the repository.
+Write reports to a scratch location, not into the repository, and create its directory first: `run` does not create it.
 
 ## 3. Make the change, then measure again
 
@@ -40,7 +40,7 @@ Only when the command succeeded, read the code as sql-tap's:
 
 | Exit code | Meaning | What to do |
 |---|---|---|
-| `2` | No statements captured, sql-tapd did not confirm the subscription, or the measurement may be incomplete | Do not use the report. Read stderr: no statements means the command bypassed the proxy; an incomplete measurement (`incomplete` / `dropped_events` in the JSON) means measure again; an unconfirmed subscription means sql-tapd may be older than sql-tap |
+| `2` | No statements captured, sql-tapd did not confirm the subscription, the measurement may be incomplete, or another error (bad arguments, the command could not start, `-out` could not be written) | Do not use the report. Read sql-tap's `Error:` line on stderr: no statements means the command bypassed the proxy; an incomplete measurement (`incomplete` / `dropped_events` in the JSON) means measure again; an unconfirmed subscription means sql-tapd may be older than sql-tap; anything else names the problem to fix |
 | `1` | N+1 or slow queries found | The report is valid; these are findings, not errors |
 | `0` | No problems found | The report is valid |
 
