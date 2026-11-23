@@ -98,10 +98,7 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		case r := <-recv:
 			if r.err != nil {
 				if isStreamDone(w.stream.Context(), r.err) {
-					if stop != nil {
-						return a.result(), ErrStreamEnded
-					}
-					return a.result(), nil
+					return a.result(), streamEndErr(stop)
 				}
 				return Result{}, fmt.Errorf("recv: %w", r.err)
 			}
@@ -120,6 +117,20 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		case <-limitC:
 			return a.result(), ErrDrainLimit
 		}
+	}
+}
+
+// streamEndErr reports whether the stream ended before stop was closed.
+// stop may already be closed even when select picked the end of stream first, so check it here.
+func streamEndErr(stop <-chan struct{}) error {
+	if stop == nil {
+		return nil
+	}
+	select {
+	case <-stop:
+		return nil
+	default:
+		return ErrStreamEnded
 	}
 }
 
