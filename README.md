@@ -321,12 +321,16 @@ No regressions.
 
 ### Agent skill
 
-[`skills/verify-sql`](./skills/verify-sql/SKILL.md) is an agent skill that teaches coding agents such as Claude Code to measure a change with `run`, compare with `diff`, and report what was and was not verified. Copy the directory into your project's `.claude/skills/` (or `~/.claude/skills/` for all projects):
+[`skills/verify-sql`](./skills/verify-sql/SKILL.md) is an agent skill that teaches coding agents such as Claude Code to measure a change with `run`, compare with `diff`, and report what was and was not verified. Install it into your project's `.claude/skills/` (or `~/.claude/skills/` for all projects) from the release tag that matches your sql-tap, so that the flags and exit codes it describes match your binary:
 
 ```bash
-mkdir -p .claude/skills
-cp -R path/to/sql-tap/skills/verify-sql .claude/skills/
+# <version> is what `sql-tap -version` prints, e.g. 0.5.0
+mkdir -p .claude/skills/verify-sql
+curl -fsSL -o .claude/skills/verify-sql/SKILL.md \
+  https://raw.githubusercontent.com/proto-tap/sql-tap/v<version>/skills/verify-sql/SKILL.md
 ```
+
+The skill is included from the first release after v0.4.0.
 
 ## Keybindings
 
