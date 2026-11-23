@@ -177,3 +177,13 @@ func TestBroker_ConcurrentPublish(t *testing.T) {
 		}
 	}
 }
+
+func TestSubscription_ZeroValue(t *testing.T) {
+	t.Parallel()
+
+	var sub broker.Subscription
+	sub.Close()
+	if got := sub.Dropped(); got != 0 {
+		t.Errorf("Dropped() = %d, want 0", got)
+	}
+}

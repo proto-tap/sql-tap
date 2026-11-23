@@ -34,13 +34,19 @@ type Subscription struct {
 }
 
 // Dropped returns how many events this subscription has dropped because its buffer was full.
+// It is 0 for the zero Subscription.
 func (s Subscription) Dropped() uint64 {
+	if s.dropped == nil {
+		return 0
+	}
 	return s.dropped.Load()
 }
 
-// Close unsubscribes. It is idempotent.
+// Close unsubscribes. It is idempotent and a no-op for the zero Subscription.
 func (s Subscription) Close() {
-	s.close()
+	if s.close != nil {
+		s.close()
+	}
 }
 
 func New(bufSize int) *Broker {
