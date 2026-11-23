@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"slices"
-	"sort"
 	"strings"
 	"time"
 
@@ -22,6 +21,8 @@ import (
 
 // Result holds the CI run outcome.
 type Result struct {
+	// Command is the measured command, set by `sql-tap run`. It is empty for -ci.
+	Command      []string
 	TotalQueries int
 	// TotalDuration sums the durations of statements counted in Templates.
 	TotalDuration time.Duration
@@ -76,6 +77,9 @@ func (r Result) Report() string {
 	var b strings.Builder
 	b.WriteString("sql-tap CI Report\n")
 	b.WriteString("=================\n")
+	if len(r.Command) > 0 {
+		fmt.Fprintf(&b, "Command:  %s\n", strings.Join(r.Command, " "))
+	}
 	fmt.Fprintf(&b, "Captured: %d queries\n", r.TotalQueries)
 
 	if !r.HasProblems() {
@@ -103,19 +107,34 @@ func (r Result) Report() string {
 // Run connects to the gRPC server at addr, collects query events until ctx is
 // cancelled or the server closes the stream, and returns the aggregated result.
 func Run(ctx context.Context, addr string) (Result, error) {
-	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, stream, err := watch(ctx, addr)
 	if err != nil {
-		return Result{}, fmt.Errorf("dial %s: %w", addr, err)
+		return Result{}, err
 	}
 	defer func() { _ = conn.Close() }()
+
+	return collect(ctx, stream)
+}
+
+func watch(ctx context.Context, addr string) (*grpc.ClientConn, tapv1.TapService_WatchClient, error) {
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return nil, nil, fmt.Errorf("dial %s: %w", addr, err)
+	}
 
 	client := tapv1.NewTapServiceClient(conn)
 	stream, err := client.Watch(ctx, &tapv1.WatchRequest{})
 	if err != nil {
-		return Result{}, fmt.Errorf("watch %s: %w", addr, err)
+		closeInBackground(conn)
+		return nil, nil, fmt.Errorf("watch %s: %w", addr, err)
 	}
+	return conn, stream, nil
+}
 
-	return collect(ctx, stream)
+// closeInBackground closes conn without waiting:
+// Close can block for seconds while a dial to an unreachable address is still in flight.
+func closeInBackground(conn *grpc.ClientConn) {
+	go func() { _ = conn.Close() }()
 }
 
 func collect(ctx context.Context, stream tapv1.TapService_WatchClient) (Result, error) {
@@ -246,11 +265,12 @@ func (a *aggregator) result() Result {
 		}
 	}
 
-	sort.Slice(r.Problems, func(i, j int) bool {
-		if r.Problems[i].Kind != r.Problems[j].Kind {
-			return r.Problems[i].Kind < r.Problems[j].Kind
-		}
-		return r.Problems[i].Count > r.Problems[j].Count
+	slices.SortFunc(r.Problems, func(x, y Problem) int {
+		return cmp.Or(
+			cmp.Compare(x.Kind, y.Kind),
+			cmp.Compare(y.Count, x.Count),
+			cmp.Compare(x.Query, y.Query),
+		)
 	})
 
 	return r

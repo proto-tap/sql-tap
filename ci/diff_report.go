@@ -1,7 +1,6 @@
 package ci
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -20,6 +19,13 @@ func (c Comparison) Report() string {
 		b.WriteString("\nChanged templates:\n")
 		for _, t := range c.Templates {
 			fmt.Fprintf(&b, "  %d -> %d  %s\n", t.Before.Count, t.After.Count, t.Query)
+		}
+	}
+
+	if len(c.Warnings) > 0 {
+		b.WriteString("\nWarnings:\n")
+		for _, w := range c.Warnings {
+			fmt.Fprintf(&b, "  %s\n", w)
 		}
 	}
 
@@ -54,6 +60,13 @@ func (c Comparison) Markdown() string {
 		}
 	} else {
 		b.WriteString("\nNo regressions.\n")
+	}
+
+	if len(c.Warnings) > 0 {
+		b.WriteString("\n**Warnings:**\n\n")
+		for _, w := range c.Warnings {
+			fmt.Fprintf(&b, "- %s\n", mdCode(w))
+		}
 	}
 
 	if len(c.Templates) > 0 {
@@ -93,10 +106,20 @@ func (r Regression) markdown() string {
 // mdCode wraps s in an inline code span that is safe inside a table cell.
 func mdCode(s string) string {
 	s = strings.ReplaceAll(s, "|", `\|`)
-	if strings.Contains(s, "`") {
-		return "`` " + s + " ``"
+	longest, run := 0, 0
+	for _, r := range s {
+		if r != '`' {
+			run = 0
+			continue
+		}
+		run++
+		longest = max(longest, run)
 	}
-	return "`" + s + "`"
+	if longest == 0 {
+		return "`" + s + "`"
+	}
+	fence := strings.Repeat("`", longest+1)
+	return fence + " " + s + " " + fence
 }
 
 type jsonComparison struct {
@@ -107,6 +130,7 @@ type jsonComparison struct {
 	TotalMs     jsonDurationDelta  `json:"total_ms"`
 	Templates   []jsonTemplateDiff `json:"templates"`
 	Regressions []jsonRegression   `json:"regressions"`
+	Warnings    []string           `json:"warnings"`
 }
 
 type jsonDelta struct {
@@ -143,6 +167,7 @@ func (c Comparison) MarshalJSON() ([]byte, error) {
 		TotalMs:     jsonDurationDelta{Before: millis(c.DurationBefore), After: millis(c.DurationAfter)},
 		Templates:   make([]jsonTemplateDiff, 0, len(c.Templates)),
 		Regressions: make([]jsonRegression, 0, len(c.Regressions)),
+		Warnings:    append([]string{}, c.Warnings...),
 	}
 	for _, t := range c.Templates {
 		out.Templates = append(out.Templates, jsonTemplateDiff{
@@ -155,7 +180,7 @@ func (c Comparison) MarshalJSON() ([]byte, error) {
 	for _, r := range c.Regressions {
 		out.Regressions = append(out.Regressions, jsonRegression(r))
 	}
-	b, err := json.Marshal(out)
+	b, err := marshalUnescaped(out)
 	if err != nil {
 		return nil, fmt.Errorf("marshal comparison: %w", err)
 	}

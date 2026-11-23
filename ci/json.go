@@ -1,6 +1,7 @@
 package ci
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,6 +15,7 @@ const SchemaVersion = 1
 
 type jsonReport struct {
 	Version      int            `json:"version"`
+	Command      []string       `json:"command,omitempty"`
 	TotalQueries int            `json:"total_queries"`
 	Statements   int            `json:"statements"`
 	TotalMs      float64        `json:"total_ms"`
@@ -40,6 +42,7 @@ type jsonProblem struct {
 func (r Result) MarshalJSON() ([]byte, error) {
 	rep := jsonReport{
 		Version:      SchemaVersion,
+		Command:      r.Command,
 		TotalQueries: r.TotalQueries,
 		Statements:   r.Statements(),
 		TotalMs:      millis(r.TotalDuration),
@@ -63,11 +66,22 @@ func (r Result) MarshalJSON() ([]byte, error) {
 			AvgMs: millis(p.AvgDuration),
 		})
 	}
-	b, err := json.Marshal(rep)
+	b, err := marshalUnescaped(rep)
 	if err != nil {
 		return nil, fmt.Errorf("marshal report: %w", err)
 	}
 	return b, nil
+}
+
+// marshalUnescaped is json.Marshal without HTML escaping, so that SQL like `a > ?` stays readable.
+func marshalUnescaped(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, fmt.Errorf("encode: %w", err)
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
 }
 
 // DecodeReport reads a JSON report written by Result.MarshalJSON.
@@ -82,6 +96,7 @@ func DecodeReport(r io.Reader) (Result, error) {
 	}
 
 	res := Result{
+		Command:       rep.Command,
 		TotalQueries:  rep.TotalQueries,
 		TotalDuration: fromMillis(rep.TotalMs),
 	}

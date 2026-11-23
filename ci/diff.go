@@ -4,7 +4,9 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"math"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -12,10 +14,22 @@ import (
 // which usually means the application did not connect through the proxy.
 var ErrNoStatements = errors.New("no statements captured")
 
+// ErrCommandMismatch is returned by Diff when both reports record different commands,
+// so their numbers are not comparable.
+var ErrCommandMismatch = errors.New("reports were measured with different commands")
+
+// ErrInvalidAllowance is returned by Diff when AllowIncreasePercent is negative or not finite.
+var ErrInvalidAllowance = errors.New("allowed increase must be a finite, non-negative percentage")
+
 // DiffOptions controls what Diff treats as a regression.
 type DiffOptions struct {
 	// AllowIncreasePercent is the statement count increase tolerated before it counts as a regression.
 	AllowIncreasePercent float64
+	// FailOnSlow treats slow query increases as regressions instead of warnings.
+	// Slow flags depend on timing and vary between runs, so they only warn by default.
+	FailOnSlow bool
+	// AllowCommandMismatch compares reports measured with different commands, with a warning.
+	AllowCommandMismatch bool
 }
 
 // RegressionKind categorizes a regression found by Diff.
@@ -60,6 +74,8 @@ type Comparison struct {
 	// sorted by the absolute change in Count descending.
 	Templates   []TemplateDiff
 	Regressions []Regression
+	// Warnings lists changes worth reviewing that do not fail the diff.
+	Warnings []string
 }
 
 // HasRegressions reports whether any metric got worse.
@@ -69,6 +85,9 @@ func (c Comparison) HasRegressions() bool {
 
 // Diff compares two results and reports regressions from before to after.
 func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
+	if p := opts.AllowIncreasePercent; p < 0 || math.IsNaN(p) || math.IsInf(p, 0) {
+		return Comparison{}, fmt.Errorf("%w: %v", ErrInvalidAllowance, p)
+	}
 	if before.Statements() == 0 {
 		return Comparison{}, fmt.Errorf("before: %w", ErrNoStatements)
 	}
@@ -76,7 +95,13 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 		return Comparison{}, fmt.Errorf("after: %w", ErrNoStatements)
 	}
 
+	warnings, err := checkCommands(before.Command, after.Command, opts.AllowCommandMismatch)
+	if err != nil {
+		return Comparison{}, err
+	}
+
 	c := Comparison{
+		Warnings:       warnings,
 		Statements:     Delta{Before: before.Statements(), After: after.Statements()},
 		DurationBefore: before.TotalDuration,
 		DurationAfter:  after.TotalDuration,
@@ -91,18 +116,47 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 		c.Slow.After += t.SlowCount
 	}
 
-	limit := float64(c.Statements.Before) * (1 + opts.AllowIncreasePercent/100)
-	if float64(c.Statements.After) > limit {
+	// Compare increase*100 with before*percent so that an increase exactly at the allowance is not
+	// rounded into a regression (100 * 1.13 is 112.99999999999999).
+	increase := float64(c.Statements.After - c.Statements.Before)
+	if increase*100 > float64(c.Statements.Before)*opts.AllowIncreasePercent {
 		c.Regressions = append(c.Regressions, Regression{
 			Kind: RegressionStatements, Before: c.Statements.Before, After: c.Statements.After,
 		})
 	}
 	c.Regressions = append(c.Regressions, flagRegressions(RegressionNPlus1, c.NPlus1, c.Templates,
 		func(t TemplateStat) int { return t.NPlus1Count })...)
-	c.Regressions = append(c.Regressions, flagRegressions(RegressionSlow, c.Slow, c.Templates,
-		func(t TemplateStat) int { return t.SlowCount })...)
+	slow := flagRegressions(RegressionSlow, c.Slow, c.Templates,
+		func(t TemplateStat) int { return t.SlowCount })
+	if opts.FailOnSlow {
+		c.Regressions = append(c.Regressions, slow...)
+	} else {
+		for _, r := range slow {
+			c.Warnings = append(c.Warnings, r.String())
+		}
+	}
 
 	return c, nil
+}
+
+func checkCommands(before, after []string, allowMismatch bool) ([]string, error) {
+	const unverified = "; cannot verify that both runs measured the same command"
+	switch {
+	case len(before) == 0 && len(after) == 0:
+		return []string{"neither report records its command" + unverified}, nil
+	case len(before) == 0:
+		return []string{"before report does not record its command" + unverified}, nil
+	case len(after) == 0:
+		return []string{"after report does not record its command" + unverified}, nil
+	case slices.Equal(before, after):
+		return nil, nil
+	}
+
+	b, a := strings.Join(before, " "), strings.Join(after, " ")
+	if !allowMismatch {
+		return nil, fmt.Errorf("%w: before %q, after %q", ErrCommandMismatch, b, a)
+	}
+	return []string{fmt.Sprintf("commands differ: before %q, after %q", b, a)}, nil
 }
 
 // flagRegressions reports an increased total, plus every template flagged for the first time.

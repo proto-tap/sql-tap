@@ -11,8 +11,13 @@ import (
 
 func writeTestReport(t *testing.T, name string, templates ...ci.TemplateStat) string {
 	t.Helper()
+	return writeTestReportWithCommand(t, name, nil, templates...)
+}
+
+func writeTestReportWithCommand(t *testing.T, name string, command []string, templates ...ci.TemplateStat) string {
+	t.Helper()
 	path := filepath.Join(t.TempDir(), name)
-	if err := writeReportFile(path, ci.Result{Templates: templates}); err != nil {
+	if err := writeReportFile(path, ci.Result{Command: command, Templates: templates}); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -26,6 +31,11 @@ func TestRunDiff(t *testing.T) {
 	same := writeTestReport(t, "same.json", ci.TemplateStat{Query: q, Count: 10})
 	more := writeTestReport(t, "more.json", ci.TemplateStat{Query: q, Count: 11})
 	empty := writeTestReport(t, "empty.json")
+	slow := writeTestReport(t, "slow.json", ci.TemplateStat{Query: q, Count: 10, SlowCount: 1})
+	cmdAll := writeTestReportWithCommand(t, "all.json", []string{"go", "test", "./..."},
+		ci.TemplateStat{Query: q, Count: 10})
+	cmdOne := writeTestReportWithCommand(t, "one.json", []string{"go", "test", "./order/..."},
+		ci.TemplateStat{Query: q, Count: 10})
 
 	tests := []struct {
 		name       string
@@ -39,11 +49,22 @@ func TestRunDiff(t *testing.T) {
 		{name: "allowed increase", args: []string{"-allow-increase=10", base, more}, wantCode: 0},
 		{name: "markdown", args: []string{"-format=markdown", base, same}, wantCode: 0, wantStdout: "### sql-tap diff"},
 		{name: "json", args: []string{"-format=json", base, more}, wantCode: 1, wantStdout: `"kind": "STATEMENTS"`},
+		{name: "json keeps arrows", args: []string{"-format=json", base, slow}, wantCode: 0,
+			wantStdout: `"[SLOW] 0 -> 1"`},
 		{name: "no statements", args: []string{base, empty}, wantCode: 2, wantStderr: "proxy port"},
 		{name: "missing file", args: []string{base, "nonexistent.json"}, wantCode: 2, wantStderr: "open nonexistent.json"},
 		{name: "unknown format", args: []string{"-format=html", base, same}, wantCode: 2, wantStderr: "unknown -format"},
 		{name: "wrong arg count", args: []string{base}, wantCode: 2, wantStderr: "Usage:"},
+		{name: "negative allowance", args: []string{"-allow-increase=-5", base, same}, wantCode: 2,
+			wantStderr: "non-negative"},
+		{name: "NaN allowance", args: []string{"-allow-increase=NaN", base, same}, wantCode: 2,
+			wantStderr: "non-negative"},
 		{name: "help", args: []string{"-h"}, wantCode: 0, wantStderr: "Exit codes:"},
+		{name: "slow warns by default", args: []string{base, slow}, wantCode: 0, wantStdout: "Warnings:"},
+		{name: "fail on slow", args: []string{"-fail-on-slow", base, slow}, wantCode: 1, wantStdout: "[SLOW] 0 -> 1"},
+		{name: "command mismatch", args: []string{cmdAll, cmdOne}, wantCode: 2, wantStderr: "-allow-command-mismatch"},
+		{name: "command mismatch allowed", args: []string{"-allow-command-mismatch", cmdAll, cmdOne}, wantCode: 0,
+			wantStdout: "commands differ"},
 	}
 
 	for _, tt := range tests {

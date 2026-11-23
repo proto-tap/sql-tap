@@ -76,6 +76,37 @@ func TestWatch(t *testing.T) {
 	}
 }
 
+func TestWatch_SendsSubscribedHeaderBeforeEvents(t *testing.T) {
+	t.Parallel()
+
+	b := broker.New(8)
+	client := startServer(t, b)
+
+	stream, err := client.Watch(t.Context(), &tapv1.WatchRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	md, err := stream.Header()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := md.Get(server.SubscribedHeader); len(got) != 1 || got[0] != "true" {
+		t.Fatalf("header %s = %v, want [true]", server.SubscribedHeader, got)
+	}
+
+	// No sleep: once the header arrives, the subscription is registered.
+	b.Publish(proxy.Event{ID: "1", Op: proxy.OpQuery, Query: "SELECT 1"})
+
+	resp, err := stream.Recv()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := resp.GetEvent().GetId(); got != "1" {
+		t.Fatalf("expected id 1, got %q", got)
+	}
+}
+
 func TestWatch_MultipleEvents(t *testing.T) {
 	t.Parallel()
 

@@ -62,6 +62,7 @@ func TestDecodeReport_RoundTrip(t *testing.T) {
 	t.Parallel()
 
 	want := ci.Result{
+		Command:       []string{"go", "test", "./..."},
 		TotalQueries:  4,
 		TotalDuration: 1500 * time.Microsecond,
 		Templates: []ci.TemplateStat{

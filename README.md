@@ -201,13 +201,17 @@ sql-tap — Watch SQL traffic in real-time
 
 Usage:
   sql-tap [flags] <addr>
+  sql-tap run [flags] <addr> -- <command> [args...]
+  sql-tap diff [flags] <before.json> <after.json>
 
 Flags:
   -ci       run in CI mode: collect events until SIGTERM/SIGINT or stream ends, then report and exit
-  -version  Show version and exit
+  -format   CI report format on stdout: text or json (default: text)
+  -out      also write the CI report as JSON to this file
+  -version  show version and exit
 ```
 
-`<addr>` is the gRPC address of sql-tapd (e.g. `localhost:9091`).
+`<addr>` is the gRPC address of sql-tapd (e.g. `localhost:9091`). See [Measuring a command](#measuring-a-command) for `run` and [Comparing reports](#comparing-reports) for `diff`.
 
 ### CI mode
 
@@ -238,6 +242,81 @@ Problems found:
   [SLOW] SELECT * FROM users JOIN ...  (avg 523ms, 3 occurrences)
 
 Exit: 1 (2 problems found)
+```
+
+Add `-format=json` to print the report as JSON, or `-out=report.json` to also write it to a file. If no statements are captured, a warning is printed to stderr; check that your application connects through the proxy port, not the database port.
+
+### Measuring a command
+
+`sql-tap run` measures the SQL traffic of a single command, without managing a background process. It connects to a running sql-tapd, waits until sql-tapd confirms the subscription, runs the command, and keeps receiving for a short while after the command exits so that no in-flight event is lost.
+
+```bash
+DATABASE_URL="postgres://user:pass@localhost:5433/db?sslmode=disable" \
+  sql-tap run -out=report.json localhost:9091 -- go test ./...
+```
+
+The command keeps its stdin / stdout / stderr, and the report is written to stderr. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
+
+The command runs in its own process group, and SIGINT / SIGTERM sent to `sql-tap run` are forwarded to the whole group, so processes it spawns (such as test binaries under `go test`) stop as well. Because the group is not the terminal's foreground group, a command that reads from a terminal stdin is stopped; `run` is meant for non-interactive commands.
+
+| Flag                 | Default | Description                                                           |
+|----------------------|---------|-----------------------------------------------------------------------|
+| `-format`            | `text`  | Report format on stderr: `text` or `json`                             |
+| `-out`               |         | Also write the report as JSON to this file                            |
+| `-subscribe-timeout` | `5s`    | How long to wait for sql-tapd to confirm the subscription             |
+| `-drain`             | `200ms` | After the command exits, stop once no event has arrived for this long |
+| `-drain-max`         | `5s`    | Upper bound on draining after the command exits                       |
+
+Exit codes:
+
+- The command's own exit code if it fails (128 + the signal number if it was killed by a signal), so test failures are never hidden
+- `0`: no problems
+- `1`: N+1 or slow queries found
+- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd)
+
+### Comparing reports
+
+`sql-tap diff` compares two JSON reports, e.g. before and after a change, and fails when SQL behavior regresses.
+
+```bash
+sql-tap run -out=before.json localhost:9091 -- go test ./...
+# ...apply the change...
+sql-tap run -out=after.json localhost:9091 -- go test ./...
+
+sql-tap diff -format=markdown before.json after.json
+```
+
+A change is a regression when:
+
+- the number of statements increases (tolerate some with `-allow-increase=<percent>`)
+- the number of N+1 queries increases, or a query is flagged as N+1 for the first time
+
+Slow queries depend on timing and vary between runs, so their increase is only reported as a warning. Pass `-fail-on-slow` to treat it as a regression. Total time is shown but never treated as a regression.
+
+`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), and reports with no statements captured.
+
+| Flag                      | Default | Description                                                      |
+|---------------------------|---------|------------------------------------------------------------------|
+| `-format`                 | `text`  | Output format: `text`, `markdown` (for pull requests) or `json`  |
+| `-allow-increase`         | `0`     | Tolerated statement count increase in percent                    |
+| `-fail-on-slow`           | `false` | Treat slow query increases as regressions                        |
+| `-allow-command-mismatch` | `false` | Compare reports measured with different commands, with a warning |
+
+Exit codes: `0` no regressions, `1` regressions found, `2` error (no statements captured, reports measured with different commands).
+
+Example Markdown output:
+
+```markdown
+### sql-tap diff
+
+| Metric | Before | After | Change |
+| --- | ---: | ---: | ---: |
+| Statements | 41 | 2 | -39 |
+| N+1 | 36 | 0 | -36 |
+| Slow | 0 | 0 | +0 |
+| Total time (ms) | 41.0 | 3.0 | -38.0 |
+
+No regressions.
 ```
 
 ## Keybindings

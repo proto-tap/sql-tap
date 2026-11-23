@@ -29,6 +29,7 @@ func fixedComparison() ci.Comparison {
 
 func regressedComparison() ci.Comparison {
 	return ci.Comparison{
+		Warnings:   []string{"[SLOW] 0 -> 1"},
 		Statements: ci.Delta{Before: 10, After: 11},
 		NPlus1:     ci.Delta{Before: 0, After: 6},
 		Regressions: []ci.Regression{
@@ -51,6 +52,7 @@ func TestComparison_Report(t *testing.T) {
 	report = regressedComparison().Report()
 	assertContains(t, report, "[STATEMENTS] 10 -> 11")
 	assertContains(t, report, "[N+1] SELECT a | b FROM t  (new, 6)")
+	assertContains(t, report, "Warnings:\n  [SLOW] 0 -> 1")
 	assertContains(t, report, "Exit: 1 (2 regressions)")
 }
 
@@ -78,16 +80,33 @@ func TestComparison_Markdown(t *testing.T) {
 	md := regressedComparison().Markdown()
 	assertContains(t, md, "- STATEMENTS: 10 → 11")
 	assertContains(t, md, "- N+1 (new, 6): `SELECT a \\| b FROM t`")
+	assertContains(t, md, "**Warnings:**\n\n- `[SLOW] 0 -> 1`")
+}
+
+func TestComparison_Markdown_WarningIsCode(t *testing.T) {
+	t.Parallel()
+
+	c := ci.Comparison{Warnings: []string{"[SLOW] SELECT `id` FROM t WHERE a < 1  (new, 1)"}}
+	assertContains(t, c.Markdown(), "- `` [SLOW] SELECT `id` FROM t WHERE a < 1  (new, 1) ``\n")
 }
 
 func TestComparison_Markdown_BacktickQuery(t *testing.T) {
 	t.Parallel()
 
-	c := ci.Comparison{
-		Statements: ci.Delta{Before: 1, After: 1},
-		Templates:  []ci.TemplateDiff{{Query: "SELECT `id` FROM t", After: ci.TemplateStat{Count: 1}}},
+	tests := []struct {
+		query string
+		want  string
+	}{
+		{query: "SELECT `id` FROM t", want: "| `` SELECT `id` FROM t `` |"},
+		{query: "SELECT `a``b` FROM t", want: "| ``` SELECT `a``b` FROM t ``` |"},
 	}
-	assertContains(t, c.Markdown(), "| `` SELECT `id` FROM t `` |")
+	for _, tt := range tests {
+		c := ci.Comparison{
+			Statements: ci.Delta{Before: 1, After: 1},
+			Templates:  []ci.TemplateDiff{{Query: tt.query, After: ci.TemplateStat{Count: 1}}},
+		}
+		assertContains(t, c.Markdown(), tt.want)
+	}
 }
 
 func TestComparison_MarshalJSON(t *testing.T) {
@@ -102,7 +121,8 @@ func TestComparison_MarshalJSON(t *testing.T) {
 		`"statements":{"before":10,"after":11},"n_plus_1":{"before":0,"after":6},"slow":{"before":0,"after":0},` +
 		`"total_ms":{"before":0,"after":0},"templates":[],` +
 		`"regressions":[{"kind":"STATEMENTS","before":10,"after":11},` +
-		`{"kind":"N+1","query":"SELECT a | b FROM t","before":0,"after":6}]}`
+		`{"kind":"N+1","query":"SELECT a | b FROM t","before":0,"after":6}],` +
+		`"warnings":["[SLOW] 0 -\u003e 1"]}`
 	if string(b) != want {
 		t.Errorf("MarshalJSON =\n%s\nwant\n%s", b, want)
 	}

@@ -37,6 +37,20 @@ func TestWriteReport(t *testing.T) {
 	}
 }
 
+func TestWriteReport_JSONKeepsSQLOperators(t *testing.T) {
+	t.Parallel()
+
+	const q = "SELECT id FROM orders WHERE total > ? AND note <> '&'"
+	var buf bytes.Buffer
+	r := ci.Result{Templates: []ci.TemplateStat{{Query: q, Count: 1}}}
+	if err := writeReport(&buf, r, "json"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(buf.String(), q) {
+		t.Errorf("output = %s, want the query unescaped", buf.String())
+	}
+}
+
 func TestWriteReportFile(t *testing.T) {
 	t.Parallel()
 
