@@ -120,6 +120,32 @@ func TestBroker_SlowSubscriberDropsEvents(t *testing.T) {
 	}
 }
 
+func TestBroker_DropsSignalsAfterCounting(t *testing.T) {
+	t.Parallel()
+
+	b := broker.New(1)
+	sub := b.Subscribe()
+	defer sub.Close()
+
+	b.Publish(proxy.Event{ID: "1"}) // fills the buffer
+	select {
+	case <-sub.Drops:
+		t.Fatal("Drops signaled without a drop")
+	default:
+	}
+
+	b.Publish(proxy.Event{ID: "2"})
+	b.Publish(proxy.Event{ID: "3"})
+	select {
+	case <-sub.Drops:
+		if got := sub.Dropped(); got != 2 {
+			t.Errorf("Dropped() = %d on signal, want 2", got)
+		}
+	default:
+		t.Fatal("Drops not signaled after a drop")
+	}
+}
+
 func TestBroker_ConcurrentPublish(t *testing.T) {
 	t.Parallel()
 

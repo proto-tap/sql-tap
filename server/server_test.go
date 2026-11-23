@@ -108,13 +108,14 @@ func TestWatch_SendsSubscribedHeaderBeforeEvents(t *testing.T) {
 	}
 }
 
-func TestWatch_ReportsDroppedEvents(t *testing.T) {
-	t.Parallel()
+// burst subscribes, overflows a 1-event buffer with n events, and returns the responses as they arrive.
+func burst(t *testing.T, reportDrops bool, n int) <-chan *tapv1.WatchResponse {
+	t.Helper()
 
-	b := broker.New(1) // tiny buffer, so a burst overflows it
+	b := broker.New(1)
 	client := startServer(t, b)
 
-	stream, err := client.Watch(t.Context(), &tapv1.WatchRequest{})
+	stream, err := client.Watch(t.Context(), &tapv1.WatchRequest{ReportDrops: reportDrops})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -122,48 +123,66 @@ func TestWatch_ReportsDroppedEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	const n = 10000
-	for i := range n {
-		b.Publish(proxy.Event{ID: strconv.Itoa(i), Op: proxy.OpQuery, Query: "SELECT 1"})
-	}
-
-	// Every event is either delivered or counted as dropped, and a drop always leaves queued events
-	// behind it, so the last response carries the final count.
-	type response struct {
-		dropped uint64
-		err     error
-	}
-	responses := make(chan response)
+	responses := make(chan *tapv1.WatchResponse)
 	go func() {
 		for {
 			resp, err := stream.Recv()
-			responses <- response{dropped: resp.GetDroppedEvents(), err: err}
 			if err != nil {
+				return
+			}
+			select {
+			case responses <- resp:
+			case <-t.Context().Done():
 				return
 			}
 		}
 	}()
 
+	for i := range n {
+		b.Publish(proxy.Event{ID: strconv.Itoa(i), Op: proxy.OpQuery, Query: "SELECT 1"})
+	}
+	return responses
+}
+
+func TestWatch_ReportsDroppedEvents(t *testing.T) {
+	t.Parallel()
+
+	// Every event is either delivered or counted as dropped, and with report_drops the final count
+	// always arrives, even for a drop with no event queued after it.
+	const n = 10000
+	responses := burst(t, true, n)
+
 	var received int
 	var dropped uint64
-	for {
+	deadline := time.After(10 * time.Second)
+	for uint64(received)+dropped != n {
 		select {
-		case r := <-responses:
-			if r.err != nil {
-				t.Fatal(r.err)
+		case resp := <-responses:
+			if resp.GetEvent() != nil {
+				received++
 			}
-			received++
-			dropped = r.dropped
-			continue
-		case <-time.After(500 * time.Millisecond):
+			dropped = max(dropped, resp.GetDroppedEvents())
+		case <-deadline:
+			t.Fatalf("received %d + dropped %d never reached %d", received, dropped, n)
 		}
-		break
-	}
-
-	if uint64(received)+dropped != n {
-		t.Errorf("received %d + dropped %d = %d, want %d", received, dropped, uint64(received)+dropped, n)
 	}
 	t.Logf("received %d, dropped %d", received, dropped)
+}
+
+func TestWatch_WithoutReportDropsEveryResponseHasAnEvent(t *testing.T) {
+	t.Parallel()
+
+	responses := burst(t, false, 1000)
+	for {
+		select {
+		case resp := <-responses:
+			if resp.GetEvent() == nil {
+				t.Fatal("got an event-less response without report_drops")
+			}
+		case <-time.After(500 * time.Millisecond):
+			return // stream went quiet without an event-less response
+		}
+	}
 }
 
 func TestWatch_MultipleEvents(t *testing.T) {

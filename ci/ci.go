@@ -133,7 +133,7 @@ func watch(ctx context.Context, addr string) (*grpc.ClientConn, tapv1.TapService
 	}
 
 	client := tapv1.NewTapServiceClient(conn)
-	stream, err := client.Watch(ctx, &tapv1.WatchRequest{})
+	stream, err := client.Watch(ctx, &tapv1.WatchRequest{ReportDrops: true})
 	if err != nil {
 		closeInBackground(conn)
 		return nil, nil, fmt.Errorf("watch %s: %w", addr, err)
@@ -158,8 +158,7 @@ func collect(ctx context.Context, stream tapv1.TapService_WatchClient) (Result, 
 			}
 			return Result{}, fmt.Errorf("recv: %w", err)
 		}
-		a.add(resp.GetEvent())
-		a.observeDropped(resp.GetDroppedEvents())
+		a.observe(resp)
 	}
 
 	return a.result(), nil
@@ -244,9 +243,12 @@ func isStatement(e *tapv1.QueryEvent) bool {
 	return false
 }
 
-// observeDropped records the subscription's cumulative drop count carried by a response.
-func (a *aggregator) observeDropped(n uint64) {
-	a.dropped = max(a.dropped, n)
+// observe records a response: its event, if any, and the subscription's cumulative drop count.
+func (a *aggregator) observe(resp *tapv1.WatchResponse) {
+	if e := resp.GetEvent(); e != nil {
+		a.add(e)
+	}
+	a.dropped = max(a.dropped, resp.GetDroppedEvents())
 }
 
 func (a *aggregator) result() Result {

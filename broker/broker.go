@@ -19,12 +19,16 @@ type Broker struct {
 type subscriber struct {
 	ch      chan proxy.Event
 	dropped *atomic.Uint64
+	drops   chan struct{}
 }
 
 // Subscription receives published events.
 type Subscription struct {
 	// Events is closed by Close.
-	Events  <-chan proxy.Event
+	Events <-chan proxy.Event
+	// Drops receives a signal after Dropped has increased. Signals coalesce, so read Dropped on receipt.
+	// Reporting from here, rather than alongside the next event, covers a drop with no event after it.
+	Drops   <-chan struct{}
 	dropped *atomic.Uint64
 	close   func()
 }
@@ -54,11 +58,16 @@ func (b *Broker) Subscribe() Subscription {
 	id := b.nextID
 	b.nextID++
 
-	sub := subscriber{ch: make(chan proxy.Event, b.bufSize), dropped: new(atomic.Uint64)}
+	sub := subscriber{
+		ch:      make(chan proxy.Event, b.bufSize),
+		dropped: new(atomic.Uint64),
+		drops:   make(chan struct{}, 1),
+	}
 	b.subscribers[id] = sub
 
 	return Subscription{
 		Events:  sub.ch,
+		Drops:   sub.drops,
 		dropped: sub.dropped,
 		close: func() {
 			b.mu.Lock()
@@ -83,6 +92,10 @@ func (b *Broker) Publish(ev proxy.Event) {
 		case sub.ch <- ev:
 		default:
 			sub.dropped.Add(1)
+			select {
+			case sub.drops <- struct{}{}:
+			default: // a signal is already pending
+			}
 		}
 	}
 }
