@@ -26,6 +26,8 @@ sql-tap run -out=<tmp>/before.json <addr> -- go test -count=1 ./order/...
 
 Write reports to a scratch location, not into the repository, and create its directory first: `run` does not create it.
 
+**The baseline must come from the unchanged code.** If the change is already made, measure "before" on the commit without it: `HEAD` if the change is uncommitted, otherwise the commit the branch started from (e.g. `git merge-base HEAD main`). Use a separate worktree (`git worktree add <tmp>/base <commit>`, run the command there, then remove the worktree), or stash an uncommitted change (`git stash`, measure, `git stash pop`). Never measure the changed code as "before": the diff would show no change and prove nothing.
+
 ## 3. Make the change, then measure again
 
 ```bash
