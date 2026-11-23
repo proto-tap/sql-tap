@@ -13,14 +13,14 @@ func TestBroker_PublishSubscribe(t *testing.T) {
 	t.Parallel()
 
 	b := broker.New(8)
-	ch, unsub := b.Subscribe()
-	defer unsub()
+	sub := b.Subscribe()
+	defer sub.Close()
 
 	ev := proxy.Event{ID: "1", Op: proxy.OpQuery, Query: "SELECT 1"}
 	b.Publish(ev)
 
 	select {
-	case got := <-ch:
+	case got := <-sub.Events:
 		if got.ID != "1" || got.Query != "SELECT 1" {
 			t.Fatalf("unexpected event: %+v", got)
 		}
@@ -34,10 +34,10 @@ func TestBroker_MultipleSubscribers(t *testing.T) {
 
 	b := broker.New(8)
 
-	ch1, unsub1 := b.Subscribe()
-	defer unsub1()
-	ch2, unsub2 := b.Subscribe()
-	defer unsub2()
+	sub1 := b.Subscribe()
+	defer sub1.Close()
+	sub2 := b.Subscribe()
+	defer sub2.Close()
 
 	if b.SubscriberCount() != 2 {
 		t.Fatalf("expected 2 subscribers, got %d", b.SubscriberCount())
@@ -46,7 +46,7 @@ func TestBroker_MultipleSubscribers(t *testing.T) {
 	ev := proxy.Event{ID: "1"}
 	b.Publish(ev)
 
-	for _, ch := range []<-chan proxy.Event{ch1, ch2} {
+	for _, ch := range []<-chan proxy.Event{sub1.Events, sub2.Events} {
 		select {
 		case got := <-ch:
 			if got.ID != "1" {
@@ -62,20 +62,20 @@ func TestBroker_Unsubscribe(t *testing.T) {
 	t.Parallel()
 
 	b := broker.New(8)
-	_, unsub := b.Subscribe()
+	sub := b.Subscribe()
 
 	if b.SubscriberCount() != 1 {
 		t.Fatalf("expected 1 subscriber, got %d", b.SubscriberCount())
 	}
 
-	unsub()
+	sub.Close()
 
 	if b.SubscriberCount() != 0 {
 		t.Fatalf("expected 0 subscribers, got %d", b.SubscriberCount())
 	}
 
 	// idempotent
-	unsub()
+	sub.Close()
 	if b.SubscriberCount() != 0 {
 		t.Fatalf("expected 0 subscribers after double unsub, got %d", b.SubscriberCount())
 	}
@@ -85,16 +85,27 @@ func TestBroker_SlowSubscriberDropsEvents(t *testing.T) {
 	t.Parallel()
 
 	b := broker.New(1) // buffer size 1
-	ch, unsub := b.Subscribe()
-	defer unsub()
+	sub := b.Subscribe()
+	defer sub.Close()
+	other := b.Subscribe()
+	defer other.Close()
 
 	// Fill the buffer.
 	b.Publish(proxy.Event{ID: "1"})
-	// This should be dropped, not block.
+	<-other.Events // other keeps up, so only sub drops
+	// These should be dropped, not block.
 	b.Publish(proxy.Event{ID: "2"})
+	b.Publish(proxy.Event{ID: "3"})
+
+	if got := sub.Dropped(); got != 2 {
+		t.Errorf("Dropped() = %d, want 2", got)
+	}
+	if got := other.Dropped(); got != 1 {
+		t.Errorf("other.Dropped() = %d, want 1 (its buffer holds event 2)", got)
+	}
 
 	select {
-	case got := <-ch:
+	case got := <-sub.Events:
 		if got.ID != "1" {
 			t.Fatalf("expected event 1, got %+v", got)
 		}
@@ -103,7 +114,7 @@ func TestBroker_SlowSubscriberDropsEvents(t *testing.T) {
 	}
 
 	select {
-	case ev := <-ch:
+	case ev := <-sub.Events:
 		t.Fatalf("expected no more events, got %+v", ev)
 	default:
 	}
@@ -113,8 +124,8 @@ func TestBroker_ConcurrentPublish(t *testing.T) {
 	t.Parallel()
 
 	b := broker.New(256)
-	ch, unsub := b.Subscribe()
-	defer unsub()
+	sub := b.Subscribe()
+	defer sub.Close()
 
 	const n = 100
 	var wg sync.WaitGroup
@@ -130,7 +141,7 @@ func TestBroker_ConcurrentPublish(t *testing.T) {
 	count := 0
 	for {
 		select {
-		case <-ch:
+		case <-sub.Events:
 			count++
 		default:
 			if count != n {

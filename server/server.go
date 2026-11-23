@@ -66,8 +66,9 @@ type tapService struct {
 }
 
 func (s *tapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
-	ch, unsub := s.broker.Subscribe()
-	defer unsub()
+	sub := s.broker.Subscribe()
+	defer sub.Close()
+	ch := sub.Events
 
 	if err := stream.SendHeader(metadata.Pairs(SubscribedHeader, "true")); err != nil {
 		return fmt.Errorf("server: watch send header: %w", err)

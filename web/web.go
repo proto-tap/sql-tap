@@ -115,8 +115,9 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	flusher.Flush() // send headers immediately
 
-	ch, unsub := s.broker.Subscribe()
-	defer unsub()
+	sub := s.broker.Subscribe()
+	defer sub.Close()
+	ch := sub.Events
 
 	ctx := r.Context()
 	for {
