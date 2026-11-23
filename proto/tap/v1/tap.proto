@@ -24,6 +24,9 @@ message WatchRequest {}
 
 message WatchResponse {
   QueryEvent event = 1;
+  // Number of events dropped so far for this subscription because the client did not keep up.
+  // A drop happens only while the buffer is full, so events still queued carry the updated count.
+  uint64 dropped_events = 2;
 }
 
 message ExplainRequest {
