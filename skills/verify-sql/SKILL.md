@@ -34,9 +34,12 @@ sql-tap run -out=<tmp>/after.json <addr> -- go test -count=1 ./order/...
 
 ## 4. Read the exit codes of `run`
 
+`run` passes the command's own exit code through when the command fails, so a code like `1` or `2` may come from the command, not from sql-tap. **Check the command's output first** (e.g. `FAIL` lines from `go test`). If the command failed, the code is the command's: fix that first; the SQL numbers do not matter yet.
+
+Only when the command succeeded, read the code as sql-tap's:
+
 | Exit code | Meaning | What to do |
 |---|---|---|
-| The command's own code | The command failed (e.g. tests failed) | Fix that first; the SQL numbers do not matter yet |
 | `2` | No statements captured, sql-tapd did not confirm the subscription, or the measurement may be incomplete | Do not use the report. Read stderr: no statements means the command bypassed the proxy; an incomplete measurement (`incomplete` / `dropped_events` in the JSON) means measure again; an unconfirmed subscription means sql-tapd may be older than sql-tap |
 | `1` | N+1 or slow queries found | The report is valid; these are findings, not errors |
 | `0` | No problems found | The report is valid |
