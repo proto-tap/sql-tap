@@ -84,7 +84,8 @@ func (s *tapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingSer
 				return nil
 			}
 			if err := stream.Send(&tapv1.WatchResponse{
-				Event: eventToProto(ev),
+				Event:         eventToProto(ev),
+				DroppedEvents: sub.Dropped(),
 			}); err != nil {
 				return fmt.Errorf("server: watch send: %w", err)
 			}

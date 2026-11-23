@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -105,6 +106,64 @@ func TestWatch_SendsSubscribedHeaderBeforeEvents(t *testing.T) {
 	if got := resp.GetEvent().GetId(); got != "1" {
 		t.Fatalf("expected id 1, got %q", got)
 	}
+}
+
+func TestWatch_ReportsDroppedEvents(t *testing.T) {
+	t.Parallel()
+
+	b := broker.New(1) // tiny buffer, so a burst overflows it
+	client := startServer(t, b)
+
+	stream, err := client.Watch(t.Context(), &tapv1.WatchRequest{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Header(); err != nil {
+		t.Fatal(err)
+	}
+
+	const n = 10000
+	for i := range n {
+		b.Publish(proxy.Event{ID: strconv.Itoa(i), Op: proxy.OpQuery, Query: "SELECT 1"})
+	}
+
+	// Every event is either delivered or counted as dropped, and a drop always leaves queued events
+	// behind it, so the last response carries the final count.
+	type response struct {
+		dropped uint64
+		err     error
+	}
+	responses := make(chan response)
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			responses <- response{dropped: resp.GetDroppedEvents(), err: err}
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	var received int
+	var dropped uint64
+	for {
+		select {
+		case r := <-responses:
+			if r.err != nil {
+				t.Fatal(r.err)
+			}
+			received++
+			dropped = r.dropped
+			continue
+		case <-time.After(500 * time.Millisecond):
+		}
+		break
+	}
+
+	if uint64(received)+dropped != n {
+		t.Errorf("received %d + dropped %d = %d, want %d", received, dropped, uint64(received)+dropped, n)
+	}
+	t.Logf("received %d, dropped %d", received, dropped)
 }
 
 func TestWatch_MultipleEvents(t *testing.T) {
