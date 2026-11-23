@@ -64,6 +64,7 @@ func TestDecodeReport_RoundTrip(t *testing.T) {
 	want := ci.Result{
 		Command:       []string{"go", "test", "./..."},
 		Incomplete:    "events kept arriving until the drain limit",
+		DroppedEvents: 7,
 		TotalQueries:  4,
 		TotalDuration: 1500 * time.Microsecond,
 		Templates: []ci.TemplateStat{

@@ -24,8 +24,10 @@ type Result struct {
 	// Command is the measured command, set by `sql-tap run`. It is empty for -ci.
 	Command []string
 	// Incomplete is why the measurement may have missed events; empty for a complete one.
-	Incomplete   string
-	TotalQueries int
+	Incomplete string
+	// DroppedEvents is how many events sql-tapd dropped because this client did not keep up.
+	DroppedEvents uint64
+	TotalQueries  int
 	// TotalDuration sums the durations of statements counted in Templates.
 	TotalDuration time.Duration
 	// Templates is sorted by TotalDuration descending.
@@ -84,6 +86,9 @@ func (r Result) Report() string {
 	}
 	if r.Incomplete != "" {
 		fmt.Fprintf(&b, "Incomplete: %s\n", r.Incomplete)
+	}
+	if r.DroppedEvents > 0 {
+		fmt.Fprintf(&b, "Dropped:  %d events (sql-tap did not keep up with sql-tapd)\n", r.DroppedEvents)
 	}
 	fmt.Fprintf(&b, "Captured: %d queries\n", r.TotalQueries)
 
@@ -154,6 +159,7 @@ func collect(ctx context.Context, stream tapv1.TapService_WatchClient) (Result, 
 			return Result{}, fmt.Errorf("recv: %w", err)
 		}
 		a.add(resp.GetEvent())
+		a.observeDropped(resp.GetDroppedEvents())
 	}
 
 	return a.result(), nil
@@ -178,6 +184,7 @@ type problemStats struct {
 
 type aggregator struct {
 	total     int
+	dropped   uint64
 	problems  map[string]*problemStats
 	templates map[string]*TemplateStat
 }
@@ -237,8 +244,13 @@ func isStatement(e *tapv1.QueryEvent) bool {
 	return false
 }
 
+// observeDropped records the subscription's cumulative drop count carried by a response.
+func (a *aggregator) observeDropped(n uint64) {
+	a.dropped = max(a.dropped, n)
+}
+
 func (a *aggregator) result() Result {
-	r := Result{TotalQueries: a.total}
+	r := Result{TotalQueries: a.total, DroppedEvents: a.dropped}
 
 	for _, t := range a.templates {
 		r.TotalDuration += t.TotalDuration

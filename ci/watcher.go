@@ -95,6 +95,7 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 				return a.result(), fmt.Errorf("recv: %w", r.err)
 			}
 			a.add(r.ev)
+			a.observeDropped(r.dropped)
 			if idle != nil {
 				idle.Reset(d.Idle)
 			}
@@ -113,8 +114,9 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 }
 
 type received struct {
-	ev  *tapv1.QueryEvent
-	err error
+	ev      *tapv1.QueryEvent
+	dropped uint64
+	err     error
 	// endErr classifies an EOF when it was received, not when Collect gets to it:
 	// stop may close in between, which must not turn an early end into a clean one.
 	endErr error
@@ -124,7 +126,7 @@ type received struct {
 func receive(stream tapv1.TapService_WatchClient, stop <-chan struct{}, out chan<- received, done <-chan struct{}) {
 	for {
 		resp, err := stream.Recv()
-		r := received{ev: resp.GetEvent(), err: err}
+		r := received{ev: resp.GetEvent(), dropped: resp.GetDroppedEvents(), err: err}
 		if errors.Is(err, io.EOF) {
 			r.endErr = streamEndErr(stop)
 		}

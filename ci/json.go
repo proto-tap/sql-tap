@@ -17,6 +17,7 @@ type jsonReport struct {
 	Version      int            `json:"version"`
 	Command      []string       `json:"command,omitempty"`
 	Incomplete   string         `json:"incomplete,omitempty"`
+	Dropped      uint64         `json:"dropped_events,omitempty"`
 	TotalQueries int            `json:"total_queries"`
 	Statements   int            `json:"statements"`
 	TotalMs      float64        `json:"total_ms"`
@@ -45,6 +46,7 @@ func (r Result) MarshalJSON() ([]byte, error) {
 		Version:      SchemaVersion,
 		Command:      r.Command,
 		Incomplete:   r.Incomplete,
+		Dropped:      r.DroppedEvents,
 		TotalQueries: r.TotalQueries,
 		Statements:   r.Statements(),
 		TotalMs:      millis(r.TotalDuration),
@@ -100,6 +102,7 @@ func DecodeReport(r io.Reader) (Result, error) {
 	res := Result{
 		Command:       rep.Command,
 		Incomplete:    rep.Incomplete,
+		DroppedEvents: rep.Dropped,
 		TotalQueries:  rep.TotalQueries,
 		TotalDuration: fromMillis(rep.TotalMs),
 	}

@@ -71,6 +71,15 @@ func TestResult_Report_Incomplete(t *testing.T) {
 	}
 }
 
+func TestResult_Report_Dropped(t *testing.T) {
+	t.Parallel()
+
+	assertContains(t, ci.Result{DroppedEvents: 3}.Report(), "Dropped:  3 events")
+	if report := (ci.Result{}).Report(); strings.Contains(report, "Dropped:") {
+		t.Errorf("report without drops should omit the Dropped line, got:\n%s", report)
+	}
+}
+
 func TestResult_Report_Command(t *testing.T) {
 	t.Parallel()
 
