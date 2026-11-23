@@ -180,16 +180,30 @@ func TestFinishRun_IncompleteMeasurement(t *testing.T) {
 	t.Parallel()
 
 	r := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
-	for _, collectErr := range []error{ci.ErrStreamEnded, ci.ErrDrainLimit} {
+	recvErr := errors.New("recv: rpc error: code = Unavailable")
+	for _, collectErr := range []error{ci.ErrStreamEnded, ci.ErrDrainLimit, recvErr} {
 		var stderr bytes.Buffer
-		code := finishRun(&stderr, []string{"true"}, nil, r, collectErr, "text", "")
+		out := filepath.Join(t.TempDir(), "report.json")
+		code := finishRun(&stderr, []string{"true"}, nil, r, collectErr, "text", out)
 		if code != 2 {
 			t.Errorf("%v: exit code = %d, want 2", collectErr, code)
 		}
 		if !strings.Contains(stderr.String(), "may be incomplete") || !strings.Contains(stderr.String(), "Captured:") {
 			t.Errorf("%v: stderr = %q, want the report and an incompleteness error", collectErr, stderr.String())
 		}
+		if got := readTestReport(t, out).Incomplete; got != collectErr.Error() {
+			t.Errorf("%v: Incomplete = %q, want %q", collectErr, got, collectErr.Error())
+		}
 	}
+}
+
+func readTestReport(t *testing.T, path string) ci.Result {
+	t.Helper()
+	r, err := readReport(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 func commandError(t *testing.T, script string) error {
@@ -267,4 +281,95 @@ func TestSignalGroup_ReachesGrandchildren(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Errorf("grandchild %d is still running after SIGTERM to the group", grandchild)
+}
+
+func TestFinishRun_OverwritesStaleOutOnCollectError(t *testing.T) {
+	t.Parallel()
+
+	out := filepath.Join(t.TempDir(), "report.json")
+	stale := ci.Result{Command: []string{"stale"}, Templates: []ci.TemplateStat{{Query: "SELECT 1", Count: 9}}}
+	if err := writeReportFile(out, stale); err != nil {
+		t.Fatal(err)
+	}
+
+	partial := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
+	var stderr bytes.Buffer
+	if code := finishRun(&stderr, []string{"true"}, nil, partial, errors.New("recv: boom"), "text", out); code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+	got := readTestReport(t, out)
+	if got.Incomplete != "recv: boom" || got.Statements() != 1 {
+		t.Errorf("report = %+v, want the partial result marked incomplete", got)
+	}
+}
+
+func TestRunRun_EmptiesStaleOutOnEarlyFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args func(out string) []string
+	}{
+		{name: "unreachable sql-tapd", args: func(out string) []string {
+			return []string{"-subscribe-timeout=200ms", "-out=" + out, "localhost:1", "--", "true"}
+		}},
+		{name: "usage error", args: func(out string) []string {
+			return []string{"-out=" + out, "localhost:9091", "go", "test"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out := filepath.Join(t.TempDir(), "report.json")
+			if err := writeReportFile(out, ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT 1", Count: 9}}}); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Chmod(out, 0o600); err != nil {
+				t.Fatal(err)
+			}
+
+			var stdout, stderr bytes.Buffer
+			if code := runRun(tt.args(out), strings.NewReader(""), &stdout, &stderr); code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			info, err := os.Stat(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Size() != 0 {
+				t.Errorf("stale report still has %d bytes, want it emptied", info.Size())
+			}
+			if perm := info.Mode().Perm(); perm != 0o600 {
+				t.Errorf("permissions = %o, want 600 kept", perm)
+			}
+			if _, err := readReport(out); err == nil {
+				t.Error("an emptied report must not decode, so that diff rejects it")
+			}
+		})
+	}
+}
+
+func TestRunRun_KeepsOutPermissions(t *testing.T) {
+	t.Parallel()
+
+	addr, b := startTapServer(t)
+	publishOnSubscribe(t, b, query("1", false))
+
+	out := filepath.Join(t.TempDir(), "report.json")
+	if err := os.WriteFile(out, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	args := append([]string{"-drain=50ms", "-out=" + out, addr}, sleepCmd...)
+	if code := runRun(args, strings.NewReader(""), &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("permissions = %o, want 600 kept for a report that may contain SQL", perm)
+	}
 }

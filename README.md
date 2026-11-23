@@ -255,7 +255,7 @@ DATABASE_URL="postgres://user:pass@localhost:5433/db?sslmode=disable" \
   sql-tap run -out=report.json localhost:9091 -- go test ./...
 ```
 
-The command keeps its stdin / stdout / stderr, and the report is written to stderr. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
+The command keeps its stdin / stdout / stderr, and the report is written to stderr. `run` empties the `-out` file when it starts (keeping its permissions), so a run that fails before measuring never leaves a report from an earlier run behind; `diff` rejects the empty file. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
 
 The command runs in its own process group, and SIGINT / SIGTERM sent to `sql-tap run` are forwarded to the whole group, so processes it spawns (such as test binaries under `go test`) stop as well. Because the group is not the terminal's foreground group, a command that reads from a terminal stdin is stopped; `run` is meant for non-interactive commands.
 
@@ -272,7 +272,7 @@ Exit codes:
 - The command's own exit code if it fails (128 + the signal number if it was killed by a signal), so test failures are never hidden
 - `0`: no problems
 - `1`: N+1 or slow queries found
-- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd)
+- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: receiving from sql-tapd failed, sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd). The report and `-out` are still written, marked incomplete
 
 ### Comparing reports
 
@@ -293,7 +293,7 @@ A change is a regression when:
 
 Slow queries depend on timing and vary between runs, so their increase is only reported as a warning. Pass `-fail-on-slow` to treat it as a regression. Total time is shown but never treated as a regression.
 
-`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), and reports with no statements captured.
+`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), reports with no statements captured, and reports marked incomplete. `run` marks a report incomplete (the JSON `incomplete` field) when it may have missed events; such a report is still written for diagnosis.
 
 | Flag                      | Default | Description                                                      |
 |---------------------------|---------|------------------------------------------------------------------|
@@ -302,7 +302,7 @@ Slow queries depend on timing and vary between runs, so their increase is only r
 | `-fail-on-slow`           | `false` | Treat slow query increases as regressions                        |
 | `-allow-command-mismatch` | `false` | Compare reports measured with different commands, with a warning |
 
-Exit codes: `0` no regressions, `1` regressions found, `2` error (no statements captured, reports measured with different commands).
+Exit codes: `0` no regressions, `1` regressions found, `2` error (no statements captured, incomplete report, reports measured with different commands).
 
 Example Markdown output:
 

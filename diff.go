@@ -24,7 +24,7 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintf(stderr, "sql-tap diff — Compare two CI reports written by -out\n\n"+
 			"Usage:\n  sql-tap diff [flags] <before.json> <after.json>\n\n"+
 			"Exit codes: 0 no regressions, 1 regressions found,\n"+
-			"2 error (no statements captured, reports measured with different commands)\n\nFlags:\n")
+			"2 error (no statements captured, incomplete report, reports measured with different commands)\n\nFlags:\n")
 		fs.PrintDefaults()
 	}
 	format := fs.String("format", "text", "output format: text, markdown or json")
@@ -72,6 +72,8 @@ func runDiff(args []string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stderr, proxyHint)
 		case errors.Is(err, ci.ErrCommandMismatch):
 			_, _ = fmt.Fprintln(stderr, "Measure both reports with the same command, or pass -allow-command-mismatch.")
+		case errors.Is(err, ci.ErrIncompleteReport):
+			_, _ = fmt.Fprintln(stderr, "The measurement may have missed events; measure again.")
 		}
 		return diffExitError
 	}

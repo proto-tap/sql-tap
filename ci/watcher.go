@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"google.golang.org/grpc"
@@ -66,29 +67,15 @@ func Subscribe(ctx context.Context, addr string, timeout time.Duration) (Watcher
 // If draining hits d.Max, it returns the result along with ErrDrainLimit.
 // If the stream ends while stop is still open, it returns the result along with ErrStreamEnded;
 // pass a nil stop to collect until the stream ends.
+// On any other receive error it returns the partial result along with the error.
 func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	defer w.Close()
+	untilStreamEnds := stop == nil
 
-	type received struct {
-		ev  *tapv1.QueryEvent
-		err error
-	}
 	recv := make(chan received)
 	done := make(chan struct{})
 	defer close(done)
-	go func() {
-		for {
-			resp, err := w.stream.Recv()
-			select {
-			case recv <- received{ev: resp.GetEvent(), err: err}:
-			case <-done:
-				return
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
+	go receive(w.stream, stop, recv, done)
 
 	a := newAggregator()
 	var idle *time.Timer
@@ -97,13 +84,15 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		select {
 		case r := <-recv:
 			if r.err != nil {
-				if isStreamDone(w.stream.Context(), r.err) {
-					if stop != nil {
-						return a.result(), ErrStreamEnded
-					}
+				switch {
+				case errors.Is(r.err, io.EOF):
+					return a.result(), r.endErr
+				case untilStreamEnds && isStreamDone(w.stream.Context(), r.err):
 					return a.result(), nil
 				}
-				return Result{}, fmt.Errorf("recv: %w", r.err)
+				// With a stop channel, only a clean EOF completes the measurement;
+				// cancellation or a deadline means it was interrupted.
+				return a.result(), fmt.Errorf("recv: %w", r.err)
 			}
 			a.add(r.ev)
 			if idle != nil {
@@ -120,6 +109,46 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		case <-limitC:
 			return a.result(), ErrDrainLimit
 		}
+	}
+}
+
+type received struct {
+	ev  *tapv1.QueryEvent
+	err error
+	// endErr classifies an EOF when it was received, not when Collect gets to it:
+	// stop may close in between, which must not turn an early end into a clean one.
+	endErr error
+}
+
+// receive forwards events from stream to out until an error or done.
+func receive(stream tapv1.TapService_WatchClient, stop <-chan struct{}, out chan<- received, done <-chan struct{}) {
+	for {
+		resp, err := stream.Recv()
+		r := received{ev: resp.GetEvent(), err: err}
+		if errors.Is(err, io.EOF) {
+			r.endErr = streamEndErr(stop)
+		}
+		select {
+		case out <- r:
+		case <-done:
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// streamEndErr reports whether the stream ended before stop was closed.
+func streamEndErr(stop <-chan struct{}) error {
+	if stop == nil {
+		return nil
+	}
+	select {
+	case <-stop:
+		return nil
+	default:
+		return ErrStreamEnded
 	}
 }
 
