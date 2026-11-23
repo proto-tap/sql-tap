@@ -255,7 +255,7 @@ DATABASE_URL="postgres://user:pass@localhost:5433/db?sslmode=disable" \
   sql-tap run -out=report.json localhost:9091 -- go test ./...
 ```
 
-The command keeps its stdin / stdout / stderr, and the report is written to stderr. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
+The command keeps its stdin / stdout / stderr, and the report is written to stderr. `run` removes the `-out` file when it starts, so a run that fails before measuring never leaves a report from an earlier run behind. The JSON report records the command, so `diff` can tell whether two reports measured the same thing.
 
 The command runs in its own process group, and SIGINT / SIGTERM sent to `sql-tap run` are forwarded to the whole group, so processes it spawns (such as test binaries under `go test`) stop as well. Because the group is not the terminal's foreground group, a command that reads from a terminal stdin is stopped; `run` is meant for non-interactive commands.
 

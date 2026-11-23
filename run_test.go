@@ -302,3 +302,36 @@ func TestFinishRun_OverwritesStaleOutOnCollectError(t *testing.T) {
 		t.Errorf("report = %+v, want the partial result marked incomplete", got)
 	}
 }
+
+func TestRunRun_RemovesStaleOutOnEarlyFailure(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		args func(out string) []string
+	}{
+		{name: "unreachable sql-tapd", args: func(out string) []string {
+			return []string{"-subscribe-timeout=200ms", "-out=" + out, "localhost:1", "--", "true"}
+		}},
+		{name: "usage error", args: func(out string) []string {
+			return []string{"-out=" + out, "localhost:9091", "go", "test"}
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			out := filepath.Join(t.TempDir(), "report.json")
+			if err := writeReportFile(out, ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT 1", Count: 9}}}); err != nil {
+				t.Fatal(err)
+			}
+
+			var stdout, stderr bytes.Buffer
+			if code := runRun(tt.args(out), strings.NewReader(""), &stdout, &stderr); code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			if _, err := os.Stat(out); !errors.Is(err, os.ErrNotExist) {
+				t.Errorf("stale report still exists (stat err = %v)", err)
+			}
+		})
+	}
+}

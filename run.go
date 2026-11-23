@@ -46,6 +46,13 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return runExitError
 	}
+	// Remove the previous report first, so that no failure below can leave it looking like this run's.
+	if *out != "" {
+		if err := os.Remove(*out); err != nil && !errors.Is(err, os.ErrNotExist) {
+			_, _ = fmt.Fprintf(stderr, "Error: remove previous report: %v\n", err)
+			return runExitError
+		}
+	}
 	rest := fs.Args()
 	if len(rest) < 3 || rest[1] != "--" {
 		fs.Usage()
