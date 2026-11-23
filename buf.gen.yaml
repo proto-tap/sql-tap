@@ -5,10 +5,10 @@ managed:
     - file_option: go_package_prefix
       value: github.com/proto-tap/sql-tap/gen
 plugins:
-  - remote: buf.build/protocolbuffers/go
+  - remote: buf.build/protocolbuffers/go:v1.36.11
     out: gen
     opt: paths=source_relative
-  - remote: buf.build/grpc/go
+  - remote: buf.build/grpc/go:v1.6.1
     out: gen
     opt: paths=source_relative
 inputs:
