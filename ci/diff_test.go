@@ -244,3 +244,20 @@ func TestDiff_InvalidAllowance(t *testing.T) {
 		}
 	}
 }
+
+func TestDiff_IncompleteReport(t *testing.T) {
+	t.Parallel()
+
+	complete := result(ci.TemplateStat{Query: qOrders, Count: 10})
+	incomplete := result(ci.TemplateStat{Query: qOrders, Count: 2})
+	incomplete.Incomplete = "sql-tapd ended the stream before measurement finished"
+
+	for _, tt := range []struct{ before, after ci.Result }{
+		{before: incomplete, after: complete},
+		{before: complete, after: incomplete},
+	} {
+		if _, err := ci.Diff(tt.before, tt.after, ci.DiffOptions{}); !errors.Is(err, ci.ErrIncompleteReport) {
+			t.Errorf("err = %v, want ErrIncompleteReport", err)
+		}
+	}
+}

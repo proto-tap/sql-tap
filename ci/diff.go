@@ -18,6 +18,10 @@ var ErrNoStatements = errors.New("no statements captured")
 // so their numbers are not comparable.
 var ErrCommandMismatch = errors.New("reports were measured with different commands")
 
+// ErrIncompleteReport is returned by Diff when either report is marked incomplete,
+// since missing events would look like an improvement.
+var ErrIncompleteReport = errors.New("report is incomplete")
+
 // ErrInvalidAllowance is returned by Diff when AllowIncreasePercent is negative or not finite.
 var ErrInvalidAllowance = errors.New("allowed increase must be a finite, non-negative percentage")
 
@@ -87,6 +91,12 @@ func (c Comparison) HasRegressions() bool {
 func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 	if p := opts.AllowIncreasePercent; p < 0 || math.IsNaN(p) || math.IsInf(p, 0) {
 		return Comparison{}, fmt.Errorf("%w: %v", ErrInvalidAllowance, p)
+	}
+	if before.Incomplete != "" {
+		return Comparison{}, fmt.Errorf("before: %w: %s", ErrIncompleteReport, before.Incomplete)
+	}
+	if after.Incomplete != "" {
+		return Comparison{}, fmt.Errorf("after: %w: %s", ErrIncompleteReport, after.Incomplete)
 	}
 	if before.Statements() == 0 {
 		return Comparison{}, fmt.Errorf("before: %w", ErrNoStatements)

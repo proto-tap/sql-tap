@@ -31,6 +31,13 @@ func TestRunDiff(t *testing.T) {
 	same := writeTestReport(t, "same.json", ci.TemplateStat{Query: q, Count: 10})
 	more := writeTestReport(t, "more.json", ci.TemplateStat{Query: q, Count: 11})
 	empty := writeTestReport(t, "empty.json")
+	partial := filepath.Join(t.TempDir(), "partial.json")
+	if err := writeReportFile(partial, ci.Result{
+		Incomplete: "events kept arriving until the drain limit",
+		Templates:  []ci.TemplateStat{{Query: q, Count: 2}},
+	}); err != nil {
+		t.Fatal(err)
+	}
 	slow := writeTestReport(t, "slow.json", ci.TemplateStat{Query: q, Count: 10, SlowCount: 1})
 	cmdAll := writeTestReportWithCommand(t, "all.json", []string{"go", "test", "./..."},
 		ci.TemplateStat{Query: q, Count: 10})
@@ -53,6 +60,7 @@ func TestRunDiff(t *testing.T) {
 			wantStdout: `"[SLOW] 0 -> 1"`},
 		{name: "no statements", args: []string{base, empty}, wantCode: 2, wantStderr: "proxy port"},
 		{name: "missing file", args: []string{base, "nonexistent.json"}, wantCode: 2, wantStderr: "open nonexistent.json"},
+		{name: "incomplete report", args: []string{base, partial}, wantCode: 2, wantStderr: "measure again"},
 		{name: "unknown format", args: []string{"-format=html", base, same}, wantCode: 2, wantStderr: "unknown -format"},
 		{name: "wrong arg count", args: []string{base}, wantCode: 2, wantStderr: "Usage:"},
 		{name: "negative allowance", args: []string{"-allow-increase=-5", base, same}, wantCode: 2,

@@ -293,7 +293,7 @@ A change is a regression when:
 
 Slow queries depend on timing and vary between runs, so their increase is only reported as a warning. Pass `-fail-on-slow` to treat it as a regression. Total time is shown but never treated as a regression.
 
-`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), and reports with no statements captured.
+`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), reports with no statements captured, and reports marked incomplete. `run` marks a report incomplete (the JSON `incomplete` field) when it may have missed events; such a report is still written for diagnosis.
 
 | Flag                      | Default | Description                                                      |
 |---------------------------|---------|------------------------------------------------------------------|
@@ -302,7 +302,7 @@ Slow queries depend on timing and vary between runs, so their increase is only r
 | `-fail-on-slow`           | `false` | Treat slow query increases as regressions                        |
 | `-allow-command-mismatch` | `false` | Compare reports measured with different commands, with a warning |
 
-Exit codes: `0` no regressions, `1` regressions found, `2` error (no statements captured, reports measured with different commands).
+Exit codes: `0` no regressions, `1` regressions found, `2` error (no statements captured, incomplete report, reports measured with different commands).
 
 Example Markdown output:
 

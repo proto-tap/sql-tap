@@ -112,6 +112,9 @@ func finishRun(
 		return exit(runExitError)
 	}
 	result.Command = command
+	if incomplete {
+		result.Incomplete = collectErr.Error()
+	}
 
 	if err := writeReport(stderr, result, format); err != nil {
 		_, _ = fmt.Fprintf(stderr, "Error: %v\n", err)

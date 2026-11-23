@@ -62,6 +62,15 @@ func TestResult_Report_NoProblems(t *testing.T) {
 	assertContains(t, report, "No problems found.")
 }
 
+func TestResult_Report_Incomplete(t *testing.T) {
+	t.Parallel()
+
+	assertContains(t, ci.Result{Incomplete: "stream ended"}.Report(), "Incomplete: stream ended")
+	if report := (ci.Result{}).Report(); strings.Contains(report, "Incomplete:") {
+		t.Errorf("complete report should omit the Incomplete line, got:\n%s", report)
+	}
+}
+
 func TestResult_Report_Command(t *testing.T) {
 	t.Parallel()
 

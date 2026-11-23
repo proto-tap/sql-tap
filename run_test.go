@@ -182,14 +182,27 @@ func TestFinishRun_IncompleteMeasurement(t *testing.T) {
 	r := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
 	for _, collectErr := range []error{ci.ErrStreamEnded, ci.ErrDrainLimit} {
 		var stderr bytes.Buffer
-		code := finishRun(&stderr, []string{"true"}, nil, r, collectErr, "text", "")
+		out := filepath.Join(t.TempDir(), "report.json")
+		code := finishRun(&stderr, []string{"true"}, nil, r, collectErr, "text", out)
 		if code != 2 {
 			t.Errorf("%v: exit code = %d, want 2", collectErr, code)
 		}
 		if !strings.Contains(stderr.String(), "may be incomplete") || !strings.Contains(stderr.String(), "Captured:") {
 			t.Errorf("%v: stderr = %q, want the report and an incompleteness error", collectErr, stderr.String())
 		}
+		if got := readTestReport(t, out).Incomplete; got != collectErr.Error() {
+			t.Errorf("%v: Incomplete = %q, want %q", collectErr, got, collectErr.Error())
+		}
 	}
+}
+
+func readTestReport(t *testing.T, path string) ci.Result {
+	t.Helper()
+	r, err := readReport(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r
 }
 
 func commandError(t *testing.T, script string) error {
