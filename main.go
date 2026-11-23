@@ -90,9 +90,7 @@ func runCIExitCode(addr, format, out string) int {
 		return 1
 	}
 
-	if result.Statements() == 0 {
-		fmt.Fprintln(os.Stderr, "Warning: no statements captured. "+proxyHint)
-	}
+	printCIWarnings(os.Stderr, result)
 
 	if err := writeReport(os.Stdout, result, format); err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -109,6 +107,21 @@ func runCIExitCode(addr, format, out string) int {
 		return 1
 	}
 	return 0
+}
+
+// printCIWarnings reports conditions that make a -ci result unreliable without changing its exit code,
+// which existing CI jobs depend on.
+func printCIWarnings(w io.Writer, r ci.Result) {
+	if r.Statements() == 0 {
+		_, _ = fmt.Fprintln(w, "Warning: no statements captured. "+proxyHint)
+	}
+	if r.DroppedEvents > 0 {
+		_, _ = fmt.Fprintf(w, "Warning: %v; the report may be incomplete.\n", droppedEventsError(r.DroppedEvents))
+	}
+}
+
+func droppedEventsError(n uint64) error {
+	return fmt.Errorf("sql-tapd dropped %d events because sql-tap did not keep up", n)
 }
 
 const proxyHint = "Check that your application connects through the sql-tapd proxy port, not the database port."

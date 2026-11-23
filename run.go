@@ -117,6 +117,9 @@ func finishRun(
 	// Any collection error leaves a partial result. Write it marked incomplete rather than nothing,
 	// so that a stale -out file is never mistaken for this run's report.
 	result.Command = command
+	if collectErr == nil && result.DroppedEvents > 0 {
+		collectErr = droppedEventsError(result.DroppedEvents)
+	}
 	if collectErr != nil {
 		result.Incomplete = collectErr.Error()
 	}
