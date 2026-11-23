@@ -72,26 +72,10 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	defer w.Close()
 	untilStreamEnds := stop == nil
 
-	type received struct {
-		ev  *tapv1.QueryEvent
-		err error
-	}
 	recv := make(chan received)
 	done := make(chan struct{})
 	defer close(done)
-	go func() {
-		for {
-			resp, err := w.stream.Recv()
-			select {
-			case recv <- received{ev: resp.GetEvent(), err: err}:
-			case <-done:
-				return
-			}
-			if err != nil {
-				return
-			}
-		}
-	}()
+	go receive(w.stream, stop, recv, done)
 
 	a := newAggregator()
 	var idle *time.Timer
@@ -102,7 +86,7 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 			if r.err != nil {
 				switch {
 				case errors.Is(r.err, io.EOF):
-					return a.result(), streamEndErr(stop)
+					return a.result(), r.endErr
 				case untilStreamEnds && isStreamDone(w.stream.Context(), r.err):
 					return a.result(), nil
 				}
@@ -128,8 +112,34 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	}
 }
 
+type received struct {
+	ev  *tapv1.QueryEvent
+	err error
+	// endErr classifies an EOF when it was received, not when Collect gets to it:
+	// stop may close in between, which must not turn an early end into a clean one.
+	endErr error
+}
+
+// receive forwards events from stream to out until an error or done.
+func receive(stream tapv1.TapService_WatchClient, stop <-chan struct{}, out chan<- received, done <-chan struct{}) {
+	for {
+		resp, err := stream.Recv()
+		r := received{ev: resp.GetEvent(), err: err}
+		if errors.Is(err, io.EOF) {
+			r.endErr = streamEndErr(stop)
+		}
+		select {
+		case out <- r:
+		case <-done:
+			return
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 // streamEndErr reports whether the stream ended before stop was closed.
-// stop may already be closed even when select picked the end of stream first, so check it here.
 func streamEndErr(stop <-chan struct{}) error {
 	if stop == nil {
 		return nil
