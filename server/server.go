@@ -65,9 +65,14 @@ type tapService struct {
 	explainClient *explain.Client
 }
 
-func (s *tapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
-	ch, unsub := s.broker.Subscribe()
-	defer unsub()
+func (s *tapService) Watch(req *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
+	sub := s.broker.Subscribe()
+	defer sub.Close()
+	ch := sub.Events
+	var drops <-chan struct{} // nil blocks forever, so drops are only reported on request
+	if req.GetReportDrops() {
+		drops = sub.Drops
+	}
 
 	if err := stream.SendHeader(metadata.Pairs(SubscribedHeader, "true")); err != nil {
 		return fmt.Errorf("server: watch send header: %w", err)
@@ -78,12 +83,17 @@ func (s *tapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingSer
 		select {
 		case <-ctx.Done():
 			return fmt.Errorf("server: watch: %w", ctx.Err())
+		case <-drops:
+			if err := stream.Send(&tapv1.WatchResponse{DroppedEvents: sub.Dropped()}); err != nil {
+				return fmt.Errorf("server: watch send: %w", err)
+			}
 		case ev, ok := <-ch:
 			if !ok {
 				return nil
 			}
 			if err := stream.Send(&tapv1.WatchResponse{
-				Event: eventToProto(ev),
+				Event:         eventToProto(ev),
+				DroppedEvents: sub.Dropped(),
 			}); err != nil {
 				return fmt.Errorf("server: watch send: %w", err)
 			}

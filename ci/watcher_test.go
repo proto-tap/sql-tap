@@ -25,9 +25,13 @@ type fakeTapService struct {
 	count    int
 	interval time.Duration
 	hold     bool
+	// dropStep makes the i-th response carry i*dropStep dropped events.
+	dropStep uint64
+	// trailingDrops, if set and the client asked for drop reports, is sent as a final event-less response.
+	trailingDrops uint64
 }
 
-func (s fakeTapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
+func (s fakeTapService) Watch(req *tapv1.WatchRequest, stream grpc.ServerStreamingServer[tapv1.WatchResponse]) error {
 	if !s.confirm {
 		<-stream.Context().Done()
 		return nil
@@ -35,12 +39,17 @@ func (s fakeTapService) Watch(_ *tapv1.WatchRequest, stream grpc.ServerStreaming
 	if err := stream.SendHeader(metadata.Pairs(server.SubscribedHeader, "true")); err != nil {
 		return err //nolint:wrapcheck // test fake
 	}
-	for range s.count {
+	for i := range s.count {
 		ev := &tapv1.QueryEvent{Query: "SELECT 1", NormalizedQuery: "SELECT ?"}
-		if err := stream.Send(&tapv1.WatchResponse{Event: ev}); err != nil {
+		if err := stream.Send(&tapv1.WatchResponse{Event: ev, DroppedEvents: uint64(i) * s.dropStep}); err != nil {
 			return err //nolint:wrapcheck // test fake
 		}
 		time.Sleep(s.interval)
+	}
+	if s.trailingDrops > 0 && req.GetReportDrops() {
+		if err := stream.Send(&tapv1.WatchResponse{DroppedEvents: s.trailingDrops}); err != nil {
+			return err //nolint:wrapcheck // test fake
+		}
 	}
 	if s.hold {
 		<-stream.Context().Done()
@@ -103,6 +112,62 @@ func TestCollect_StreamEndsBeforeStop(t *testing.T) {
 	}
 	if got := r.Statements(); got != 2 {
 		t.Errorf("Statements() = %d, want the partial result of 2", got)
+	}
+}
+
+func TestCollectAndRun_DroppedEvents(t *testing.T) {
+	t.Parallel()
+
+	// Responses carry 0, 2, 4 dropped events; the result keeps the latest cumulative count.
+	addr := startFakeServer(t, fakeTapService{confirm: true, count: 3, dropStep: 2})
+
+	w, err := ci.Subscribe(t.Context(), addr, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := w.Collect(nil, ci.Drain{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.DroppedEvents != 4 {
+		t.Errorf("Collect: DroppedEvents = %d, want 4", r.DroppedEvents)
+	}
+
+	r, err = ci.Run(t.Context(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.DroppedEvents != 4 {
+		t.Errorf("Run: DroppedEvents = %d, want 4", r.DroppedEvents)
+	}
+}
+
+func TestCollectAndRun_EventlessDropReport(t *testing.T) {
+	t.Parallel()
+
+	// Two events, then a drop reported without an event; the fake only sends it if asked to.
+	addr := startFakeServer(t, fakeTapService{confirm: true, count: 2, trailingDrops: 1})
+
+	w, err := ci.Subscribe(t.Context(), addr, 5*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, err := w.Collect(nil, ci.Drain{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.DroppedEvents != 1 || r.Statements() != 2 || r.TotalQueries != 2 {
+		t.Errorf("Collect: dropped %d, statements %d, total %d; want 1, 2, 2",
+			r.DroppedEvents, r.Statements(), r.TotalQueries)
+	}
+
+	r, err = ci.Run(t.Context(), addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.DroppedEvents != 1 || r.Statements() != 2 || r.TotalQueries != 2 {
+		t.Errorf("Run: dropped %d, statements %d, total %d; want 1, 2, 2",
+			r.DroppedEvents, r.Statements(), r.TotalQueries)
 	}
 }
 

@@ -373,3 +373,17 @@ func TestRunRun_KeepsOutPermissions(t *testing.T) {
 		t.Errorf("permissions = %o, want 600 kept for a report that may contain SQL", perm)
 	}
 }
+
+func TestFinishRun_DroppedEventsMakeReportIncomplete(t *testing.T) {
+	t.Parallel()
+
+	r := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}, DroppedEvents: 3}
+	out := filepath.Join(t.TempDir(), "report.json")
+	var stderr bytes.Buffer
+	if code := finishRun(&stderr, []string{"true"}, nil, r, nil, "text", out); code != 2 {
+		t.Errorf("exit code = %d, want 2 (stderr: %s)", code, stderr.String())
+	}
+	if got := readTestReport(t, out).Incomplete; !strings.Contains(got, "dropped 3 events") {
+		t.Errorf("Incomplete = %q, want it to mention the dropped events", got)
+	}
+}

@@ -156,7 +156,10 @@ func (x *QueryEvent) GetSlowQuery() bool {
 }
 
 type WatchRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Also send event-less responses carrying dropped_events as soon as events are dropped.
+	// Clients that expect every response to carry an event leave this unset.
+	ReportDrops   bool `protobuf:"varint,1,opt,name=report_drops,json=reportDrops,proto3" json:"report_drops,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -191,9 +194,19 @@ func (*WatchRequest) Descriptor() ([]byte, []int) {
 	return file_tap_v1_tap_proto_rawDescGZIP(), []int{1}
 }
 
+func (x *WatchRequest) GetReportDrops() bool {
+	if x != nil {
+		return x.ReportDrops
+	}
+	return false
+}
+
 type WatchResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Event         *QueryEvent            `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Event *QueryEvent            `protobuf:"bytes,1,opt,name=event,proto3" json:"event,omitempty"`
+	// Number of events dropped so far for this subscription because the client did not keep up.
+	// event is unset on responses sent only to report this count (see WatchRequest.report_drops).
+	DroppedEvents uint64 `protobuf:"varint,2,opt,name=dropped_events,json=droppedEvents,proto3" json:"dropped_events,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -233,6 +246,13 @@ func (x *WatchResponse) GetEvent() *QueryEvent {
 		return x.Event
 	}
 	return nil
+}
+
+func (x *WatchResponse) GetDroppedEvents() uint64 {
+	if x != nil {
+		return x.DroppedEvents
+	}
+	return 0
 }
 
 type ExplainRequest struct {
@@ -360,10 +380,12 @@ const file_tap_v1_tap_proto_rawDesc = "" +
 	" \x01(\bR\x06nPlus1\x12)\n" +
 	"\x10normalized_query\x18\v \x01(\tR\x0fnormalizedQuery\x12\x1d\n" +
 	"\n" +
-	"slow_query\x18\f \x01(\bR\tslowQuery\"\x0e\n" +
-	"\fWatchRequest\"9\n" +
+	"slow_query\x18\f \x01(\bR\tslowQuery\"1\n" +
+	"\fWatchRequest\x12!\n" +
+	"\freport_drops\x18\x01 \x01(\bR\vreportDrops\"`\n" +
 	"\rWatchResponse\x12(\n" +
-	"\x05event\x18\x01 \x01(\v2\x12.tap.v1.QueryEventR\x05event\"T\n" +
+	"\x05event\x18\x01 \x01(\v2\x12.tap.v1.QueryEventR\x05event\x12%\n" +
+	"\x0edropped_events\x18\x02 \x01(\x04R\rdroppedEvents\"T\n" +
 	"\x0eExplainRequest\x12\x14\n" +
 	"\x05query\x18\x01 \x01(\tR\x05query\x12\x12\n" +
 	"\x04args\x18\x02 \x03(\tR\x04args\x12\x18\n" +

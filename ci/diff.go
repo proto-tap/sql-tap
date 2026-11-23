@@ -92,11 +92,11 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 	if p := opts.AllowIncreasePercent; p < 0 || math.IsNaN(p) || math.IsInf(p, 0) {
 		return Comparison{}, fmt.Errorf("%w: %v", ErrInvalidAllowance, p)
 	}
-	if before.Incomplete != "" {
-		return Comparison{}, fmt.Errorf("before: %w: %s", ErrIncompleteReport, before.Incomplete)
+	if err := checkComplete("before", before); err != nil {
+		return Comparison{}, err
 	}
-	if after.Incomplete != "" {
-		return Comparison{}, fmt.Errorf("after: %w: %s", ErrIncompleteReport, after.Incomplete)
+	if err := checkComplete("after", after); err != nil {
+		return Comparison{}, err
 	}
 	if before.Statements() == 0 {
 		return Comparison{}, fmt.Errorf("before: %w", ErrNoStatements)
@@ -147,6 +147,18 @@ func Diff(before, after Result, opts DiffOptions) (Comparison, error) {
 	}
 
 	return c, nil
+}
+
+// checkComplete rejects a report that may have missed events, including -ci reports with drops,
+// which are not marked Incomplete.
+func checkComplete(side string, r Result) error {
+	switch {
+	case r.Incomplete != "":
+		return fmt.Errorf("%s: %w: %s", side, ErrIncompleteReport, r.Incomplete)
+	case r.DroppedEvents > 0:
+		return fmt.Errorf("%s: %w: %d events dropped", side, ErrIncompleteReport, r.DroppedEvents)
+	}
+	return nil
 }
 
 func checkCommands(before, after []string, allowMismatch bool) ([]string, error) {

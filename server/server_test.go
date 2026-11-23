@@ -2,6 +2,7 @@ package server_test
 
 import (
 	"net"
+	"strconv"
 	"testing"
 	"time"
 
@@ -104,6 +105,83 @@ func TestWatch_SendsSubscribedHeaderBeforeEvents(t *testing.T) {
 	}
 	if got := resp.GetEvent().GetId(); got != "1" {
 		t.Fatalf("expected id 1, got %q", got)
+	}
+}
+
+// burst subscribes, overflows a 1-event buffer with n events, and returns the responses as they arrive.
+func burst(t *testing.T, reportDrops bool, n int) <-chan *tapv1.WatchResponse {
+	t.Helper()
+
+	b := broker.New(1)
+	client := startServer(t, b)
+
+	stream, err := client.Watch(t.Context(), &tapv1.WatchRequest{ReportDrops: reportDrops})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := stream.Header(); err != nil {
+		t.Fatal(err)
+	}
+
+	responses := make(chan *tapv1.WatchResponse)
+	go func() {
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				return
+			}
+			select {
+			case responses <- resp:
+			case <-t.Context().Done():
+				return
+			}
+		}
+	}()
+
+	for i := range n {
+		b.Publish(proxy.Event{ID: strconv.Itoa(i), Op: proxy.OpQuery, Query: "SELECT 1"})
+	}
+	return responses
+}
+
+func TestWatch_ReportsDroppedEvents(t *testing.T) {
+	t.Parallel()
+
+	// Every event is either delivered or counted as dropped, and with report_drops the final count
+	// always arrives, even for a drop with no event queued after it.
+	const n = 10000
+	responses := burst(t, true, n)
+
+	var received int
+	var dropped uint64
+	deadline := time.After(10 * time.Second)
+	for uint64(received)+dropped != n {
+		select {
+		case resp := <-responses:
+			if resp.GetEvent() != nil {
+				received++
+			}
+			dropped = max(dropped, resp.GetDroppedEvents())
+		case <-deadline:
+			t.Fatalf("received %d + dropped %d never reached %d", received, dropped, n)
+		}
+	}
+	t.Logf("received %d, dropped %d", received, dropped)
+}
+
+func TestWatch_WithoutReportDropsEveryResponseHasAnEvent(t *testing.T) {
+	t.Parallel()
+
+	responses := burst(t, false, 1000)
+	for {
+		select {
+		case resp := <-responses:
+			if resp.GetEvent() == nil {
+				t.Fatal("got an event-less response without report_drops")
+			}
+		case <-time.After(500 * time.Millisecond):
+			return // stream went quiet without an event-less response
+		}
 	}
 }
 

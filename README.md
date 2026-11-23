@@ -244,7 +244,7 @@ Problems found:
 Exit: 1 (2 problems found)
 ```
 
-Add `-format=json` to print the report as JSON, or `-out=report.json` to also write it to a file. If no statements are captured, a warning is printed to stderr; check that your application connects through the proxy port, not the database port.
+Add `-format=json` to print the report as JSON, or `-out=report.json` to also write it to a file. If no statements are captured, a warning is printed to stderr; check that your application connects through the proxy port, not the database port. A warning is also printed when sql-tapd dropped events because sql-tap did not keep up (the JSON `dropped_events` field); the exit code is unchanged in both cases.
 
 ### Measuring a command
 
@@ -272,7 +272,7 @@ Exit codes:
 - The command's own exit code if it fails (128 + the signal number if it was killed by a signal), so test failures are never hidden
 - `0`: no problems
 - `1`: N+1 or slow queries found
-- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: receiving from sql-tapd failed, sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd). The report and `-out` are still written, marked incomplete
+- `2`: no statements captured, sql-tapd did not confirm the subscription (it may be older than sql-tap), or the measurement may be incomplete: receiving from sql-tapd failed, sql-tapd dropped events because sql-tap did not keep up, sql-tapd ended the stream before the command finished, or events kept arriving until `-drain-max` (another application may be using the same sql-tapd). The report and `-out` are still written, marked incomplete
 
 ### Comparing reports
 
@@ -293,7 +293,7 @@ A change is a regression when:
 
 Slow queries depend on timing and vary between runs, so their increase is only reported as a warning. Pass `-fail-on-slow` to treat it as a regression. Total time is shown but never treated as a regression.
 
-`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), reports with no statements captured, and reports marked incomplete. `run` marks a report incomplete (the JSON `incomplete` field) when it may have missed events; such a report is still written for diagnosis.
+`diff` refuses to compare reports measured with different commands (pass `-allow-command-mismatch` to compare anyway), reports with no statements captured, and reports marked incomplete or with dropped events. `run` marks a report incomplete (the JSON `incomplete` field) when it may have missed events; such a report is still written for diagnosis.
 
 | Flag                      | Default | Description                                                      |
 |---------------------------|---------|------------------------------------------------------------------|

@@ -20,10 +20,17 @@ message QueryEvent {
   bool slow_query = 12;
 }
 
-message WatchRequest {}
+message WatchRequest {
+  // Also send event-less responses carrying dropped_events as soon as events are dropped.
+  // Clients that expect every response to carry an event leave this unset.
+  bool report_drops = 1;
+}
 
 message WatchResponse {
   QueryEvent event = 1;
+  // Number of events dropped so far for this subscription because the client did not keep up.
+  // event is unset on responses sent only to report this count (see WatchRequest.report_drops).
+  uint64 dropped_events = 2;
 }
 
 message ExplainRequest {

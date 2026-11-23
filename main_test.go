@@ -74,3 +74,33 @@ func TestWriteReportFile(t *testing.T) {
 		t.Errorf("got %+v, want version %d and total_queries 3", got, ci.SchemaVersion)
 	}
 }
+
+func TestPrintCIWarnings(t *testing.T) {
+	t.Parallel()
+
+	stmt := []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}
+	tests := []struct {
+		name string
+		r    ci.Result
+		want []string
+	}{
+		{name: "clean", r: ci.Result{Templates: stmt}},
+		{name: "no statements", r: ci.Result{}, want: []string{"no statements captured"}},
+		{name: "dropped", r: ci.Result{Templates: stmt, DroppedEvents: 3}, want: []string{"dropped 3 events"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			var buf bytes.Buffer
+			printCIWarnings(&buf, tt.r)
+			if len(tt.want) == 0 && buf.Len() != 0 {
+				t.Errorf("output = %q, want none", buf.String())
+			}
+			for _, w := range tt.want {
+				if !strings.Contains(buf.String(), w) {
+					t.Errorf("output = %q, want to contain %q", buf.String(), w)
+				}
+			}
+		})
+	}
+}

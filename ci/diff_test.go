@@ -252,9 +252,14 @@ func TestDiff_IncompleteReport(t *testing.T) {
 	incomplete := result(ci.TemplateStat{Query: qOrders, Count: 2})
 	incomplete.Incomplete = "sql-tapd ended the stream before measurement finished"
 
+	dropped := result(ci.TemplateStat{Query: qOrders, Count: 10})
+	dropped.DroppedEvents = 1 // e.g. a -ci report, which is not marked Incomplete
+
 	for _, tt := range []struct{ before, after ci.Result }{
 		{before: incomplete, after: complete},
 		{before: complete, after: incomplete},
+		{before: dropped, after: complete},
+		{before: complete, after: dropped},
 	} {
 		if _, err := ci.Diff(tt.before, tt.after, ci.DiffOptions{}); !errors.Is(err, ci.ErrIncompleteReport) {
 			t.Errorf("err = %v, want ErrIncompleteReport", err)
