@@ -54,10 +54,10 @@ sql-tap diff -format=markdown <tmp>/before.json <tmp>/after.json
 |---|---|
 | `0` | No regressions |
 | `1` | Regressions: more statements, more N+1 queries, or a query newly flagged as N+1 |
-| `2` | The comparison is invalid: different commands, no statements, or an incomplete report |
+| `2` | The comparison is invalid (different commands, no statements, an incomplete report), or another error (a missing or unreadable report file, bad arguments) |
 
 - On `1`, investigate and fix before reporting. Do not claim the change is fine.
-- On `2`, measure again; do not work around it.
+- On `2`, read the `Error:` line on stderr first. Measure again only for an invalid comparison; fix the path or arguments for other errors. Do not work around it.
 - Do not pass `-allow-command-mismatch`, `-allow-increase` or `-fail-on-slow` unless the user asked for it, and say so in the report when you do.
 - Never edit a report by hand.
 
