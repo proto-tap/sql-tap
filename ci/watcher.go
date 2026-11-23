@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"time"
 
 	"google.golang.org/grpc"
@@ -69,6 +70,7 @@ func Subscribe(ctx context.Context, addr string, timeout time.Duration) (Watcher
 // On any other receive error it returns the partial result along with the error.
 func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	defer w.Close()
+	untilStreamEnds := stop == nil
 
 	type received struct {
 		ev  *tapv1.QueryEvent
@@ -98,9 +100,14 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 		select {
 		case r := <-recv:
 			if r.err != nil {
-				if isStreamDone(w.stream.Context(), r.err) {
+				switch {
+				case errors.Is(r.err, io.EOF):
 					return a.result(), streamEndErr(stop)
+				case untilStreamEnds && isStreamDone(w.stream.Context(), r.err):
+					return a.result(), nil
 				}
+				// With a stop channel, only a clean EOF completes the measurement;
+				// cancellation or a deadline means it was interrupted.
 				return a.result(), fmt.Errorf("recv: %w", r.err)
 			}
 			a.add(r.ev)
