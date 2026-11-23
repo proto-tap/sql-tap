@@ -120,31 +120,21 @@ func TestCollect_CancellationIsNotACleanEnd(t *testing.T) {
 	}
 }
 
-// signalingStream reports EOF and signals once it has returned.
-type signalingStream struct {
-	grpc.ClientStream
-
-	returned chan struct{}
-}
-
-func (s signalingStream) Recv() (*tapv1.WatchResponse, error) {
-	defer close(s.returned)
-	return nil, io.EOF
-}
-
 func TestReceive_ClassifiesEOFWhenReceived(t *testing.T) {
 	t.Parallel()
 
 	// EOF arrives while stop is open; stop closes before the collector processes it.
 	stop := make(chan struct{})
-	stream := signalingStream{returned: make(chan struct{})}
-	out := make(chan received)
+	out := make(chan received, 1) // buffered, so receive can classify and forward without a collector
 	done := make(chan struct{})
 	defer close(done)
-	go receive(stream, stop, out, done)
 
-	<-stream.returned
-	time.Sleep(50 * time.Millisecond) // let receive classify the EOF before stop closes
+	exited := make(chan struct{})
+	go func() {
+		receive(failingStream{i: new(int), err: io.EOF}, stop, out, done)
+		close(exited)
+	}()
+	<-exited // receive has classified and forwarded the EOF
 	close(stop)
 
 	if r := <-out; !errors.Is(r.endErr, ErrStreamEnded) {
