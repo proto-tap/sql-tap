@@ -66,6 +66,7 @@ func Subscribe(ctx context.Context, addr string, timeout time.Duration) (Watcher
 // If draining hits d.Max, it returns the result along with ErrDrainLimit.
 // If the stream ends while stop is still open, it returns the result along with ErrStreamEnded;
 // pass a nil stop to collect until the stream ends.
+// On any other receive error it returns the partial result along with the error.
 func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 	defer w.Close()
 
@@ -100,7 +101,7 @@ func (w Watcher) Collect(stop <-chan struct{}, d Drain) (Result, error) {
 				if isStreamDone(w.stream.Context(), r.err) {
 					return a.result(), streamEndErr(stop)
 				}
-				return Result{}, fmt.Errorf("recv: %w", r.err)
+				return a.result(), fmt.Errorf("recv: %w", r.err)
 			}
 			a.add(r.ev)
 			if idle != nil {

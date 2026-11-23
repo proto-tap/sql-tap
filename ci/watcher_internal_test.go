@@ -1,8 +1,17 @@
 package ci
 
 import (
+	"context"
 	"errors"
 	"testing"
+	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
+
+	tapv1 "github.com/proto-tap/sql-tap/gen/tap/v1"
 )
 
 func TestStreamEndErr(t *testing.T) {
@@ -27,5 +36,48 @@ func TestStreamEndErr(t *testing.T) {
 				t.Errorf("streamEndErr() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// failingStream delivers events and then fails with Unavailable, like a dropped connection.
+type failingStream struct {
+	grpc.ClientStream
+
+	events []*tapv1.QueryEvent
+	i      *int
+}
+
+func (s failingStream) Recv() (*tapv1.WatchResponse, error) {
+	if *s.i < len(s.events) {
+		ev := s.events[*s.i]
+		*s.i++
+		return &tapv1.WatchResponse{Event: ev}, nil
+	}
+	return nil, status.Error(codes.Unavailable, "connection lost")
+}
+
+func (failingStream) Context() context.Context {
+	return context.Background()
+}
+
+func TestCollect_ReceiveErrorKeepsPartialResult(t *testing.T) {
+	t.Parallel()
+
+	conn, err := grpc.NewClient("localhost:1", grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := []*tapv1.QueryEvent{
+		{Query: "SELECT 1", NormalizedQuery: "SELECT ?"},
+		{Query: "SELECT 2", NormalizedQuery: "SELECT ?"},
+	}
+	w := Watcher{conn: conn, stream: failingStream{events: events, i: new(int)}, cancel: func() {}}
+
+	r, err := w.Collect(make(chan struct{}), Drain{Idle: time.Second, Max: 5 * time.Second})
+	if status.Code(errors.Unwrap(err)) != codes.Unavailable {
+		t.Fatalf("err = %v, want Unavailable", err)
+	}
+	if got := r.Statements(); got != 2 {
+		t.Errorf("Statements() = %d, want the partial result of 2", got)
 	}
 }

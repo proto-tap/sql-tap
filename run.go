@@ -106,13 +106,10 @@ func finishRun(
 		return code
 	}
 
-	incomplete := errors.Is(collectErr, ci.ErrDrainLimit) || errors.Is(collectErr, ci.ErrStreamEnded)
-	if collectErr != nil && !incomplete {
-		_, _ = fmt.Fprintf(stderr, "Error: %v\n", collectErr)
-		return exit(runExitError)
-	}
+	// Any collection error leaves a partial result. Write it marked incomplete rather than nothing,
+	// so that a stale -out file is never mistaken for this run's report.
 	result.Command = command
-	if incomplete {
+	if collectErr != nil {
 		result.Incomplete = collectErr.Error()
 	}
 
@@ -130,15 +127,15 @@ func finishRun(
 	if failure != 0 {
 		return failure
 	}
-	if result.Statements() == 0 {
-		_, _ = fmt.Fprintln(stderr, "Error: no statements captured. "+proxyHint)
-		return runExitError
-	}
-	if incomplete {
+	if collectErr != nil {
 		_, _ = fmt.Fprintf(stderr, "Error: %v; the report may be incomplete.\n", collectErr)
 		if errors.Is(collectErr, ci.ErrDrainLimit) {
 			_, _ = fmt.Fprintln(stderr, "Check whether another application is using the same sql-tapd.")
 		}
+		return runExitError
+	}
+	if result.Statements() == 0 {
+		_, _ = fmt.Fprintln(stderr, "Error: no statements captured. "+proxyHint)
 		return runExitError
 	}
 	if result.HasProblems() {

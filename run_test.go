@@ -180,7 +180,8 @@ func TestFinishRun_IncompleteMeasurement(t *testing.T) {
 	t.Parallel()
 
 	r := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
-	for _, collectErr := range []error{ci.ErrStreamEnded, ci.ErrDrainLimit} {
+	recvErr := errors.New("recv: rpc error: code = Unavailable")
+	for _, collectErr := range []error{ci.ErrStreamEnded, ci.ErrDrainLimit, recvErr} {
 		var stderr bytes.Buffer
 		out := filepath.Join(t.TempDir(), "report.json")
 		code := finishRun(&stderr, []string{"true"}, nil, r, collectErr, "text", out)
@@ -280,4 +281,24 @@ func TestSignalGroup_ReachesGrandchildren(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Errorf("grandchild %d is still running after SIGTERM to the group", grandchild)
+}
+
+func TestFinishRun_OverwritesStaleOutOnCollectError(t *testing.T) {
+	t.Parallel()
+
+	out := filepath.Join(t.TempDir(), "report.json")
+	stale := ci.Result{Command: []string{"stale"}, Templates: []ci.TemplateStat{{Query: "SELECT 1", Count: 9}}}
+	if err := writeReportFile(out, stale); err != nil {
+		t.Fatal(err)
+	}
+
+	partial := ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT id FROM orders", Count: 1}}}
+	var stderr bytes.Buffer
+	if code := finishRun(&stderr, []string{"true"}, nil, partial, errors.New("recv: boom"), "text", out); code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+	got := readTestReport(t, out)
+	if got.Incomplete != "recv: boom" || got.Statements() != 1 {
+		t.Errorf("report = %+v, want the partial result marked incomplete", got)
+	}
 }
