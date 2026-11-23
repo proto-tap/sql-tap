@@ -319,6 +319,15 @@ Example Markdown output:
 No regressions.
 ```
 
+### Agent skill
+
+[`skills/verify-sql`](./skills/verify-sql/SKILL.md) is an agent skill that teaches coding agents such as Claude Code to measure a change with `run`, compare with `diff`, and report what was and was not verified. Copy the directory into your project's `.claude/skills/` (or `~/.claude/skills/` for all projects):
+
+```bash
+mkdir -p .claude/skills
+cp -R path/to/sql-tap/skills/verify-sql .claude/skills/
+```
+
 ## Keybindings
 
 ### List view
