@@ -67,7 +67,7 @@ sql-tap diff -format=markdown <tmp>/before.json <tmp>/after.json
 
 Include the Markdown output of `diff` as is, then state separately:
 
-- **Verified:** what the numbers show, for the measured command only (e.g. "statements 41 → 2 and N+1 36 → 0 in `go test ./order/...`").
+- **Verified:** what the numbers show, for the measured command only (e.g. "statements 41 → 2 and N+1 36 → 0 in `go test -count=1 ./order/...`"; cite the exact command you measured).
 - **Not verified:** what the measurement does not cover, such as code paths the command does not exercise, production data volumes, and query latency.
 
 Keep these limits in mind:
