@@ -46,10 +46,11 @@ func runRun(args []string, stdin io.Reader, stdout, stderr io.Writer) int {
 		}
 		return runExitError
 	}
-	// Remove the previous report first, so that no failure below can leave it looking like this run's.
+	// Empty the previous report first, so that no failure below can leave it looking like this run's.
+	// Truncating rather than removing keeps the file's permissions.
 	if *out != "" {
-		if err := os.Remove(*out); err != nil && !errors.Is(err, os.ErrNotExist) {
-			_, _ = fmt.Fprintf(stderr, "Error: remove previous report: %v\n", err)
+		if err := os.Truncate(*out, 0); err != nil && !errors.Is(err, os.ErrNotExist) {
+			_, _ = fmt.Fprintf(stderr, "Error: empty previous report: %v\n", err)
 			return runExitError
 		}
 	}

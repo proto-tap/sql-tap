@@ -303,7 +303,7 @@ func TestFinishRun_OverwritesStaleOutOnCollectError(t *testing.T) {
 	}
 }
 
-func TestRunRun_RemovesStaleOutOnEarlyFailure(t *testing.T) {
+func TestRunRun_EmptiesStaleOutOnEarlyFailure(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
@@ -324,14 +324,52 @@ func TestRunRun_RemovesStaleOutOnEarlyFailure(t *testing.T) {
 			if err := writeReportFile(out, ci.Result{Templates: []ci.TemplateStat{{Query: "SELECT 1", Count: 9}}}); err != nil {
 				t.Fatal(err)
 			}
+			if err := os.Chmod(out, 0o600); err != nil {
+				t.Fatal(err)
+			}
 
 			var stdout, stderr bytes.Buffer
 			if code := runRun(tt.args(out), strings.NewReader(""), &stdout, &stderr); code != 2 {
 				t.Errorf("exit code = %d, want 2", code)
 			}
-			if _, err := os.Stat(out); !errors.Is(err, os.ErrNotExist) {
-				t.Errorf("stale report still exists (stat err = %v)", err)
+			info, err := os.Stat(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Size() != 0 {
+				t.Errorf("stale report still has %d bytes, want it emptied", info.Size())
+			}
+			if perm := info.Mode().Perm(); perm != 0o600 {
+				t.Errorf("permissions = %o, want 600 kept", perm)
+			}
+			if _, err := readReport(out); err == nil {
+				t.Error("an emptied report must not decode, so that diff rejects it")
 			}
 		})
+	}
+}
+
+func TestRunRun_KeepsOutPermissions(t *testing.T) {
+	t.Parallel()
+
+	addr, b := startTapServer(t)
+	publishOnSubscribe(t, b, query("1", false))
+
+	out := filepath.Join(t.TempDir(), "report.json")
+	if err := os.WriteFile(out, []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var stdout, stderr bytes.Buffer
+	args := append([]string{"-drain=50ms", "-out=" + out, addr}, sleepCmd...)
+	if code := runRun(args, strings.NewReader(""), &stdout, &stderr); code != 0 {
+		t.Fatalf("exit code = %d, want 0 (stderr: %s)", code, stderr.String())
+	}
+	info, err := os.Stat(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("permissions = %o, want 600 kept for a report that may contain SQL", perm)
 	}
 }
